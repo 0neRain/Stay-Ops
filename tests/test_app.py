@@ -11,6 +11,23 @@ async def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
+async def test_frontend_routes_serve_the_application() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        for route in ("/", "/auth", "/dashboard"):
+            response = await client.get(route)
+            assert response.status_code == 200
+            assert "StayOps" in response.text
+
+        stylesheet = await client.get("/static/styles.css")
+        script = await client.get("/static/app.js")
+
+    assert stylesheet.status_code == 200
+    assert "text/css" in stylesheet.headers["content-type"]
+    assert script.status_code == 200
+    assert "javascript" in script.headers["content-type"]
+
+
 async def test_auth_routes_are_in_openapi_schema() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

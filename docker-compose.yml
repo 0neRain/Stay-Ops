@@ -1,0 +1,37 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: stayops
+      POSTGRES_USER: stayops
+      POSTGRES_PASSWORD: stayops
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stayops -d stayops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - stayops-postgres:/var/lib/postgresql/data
+
+  mock-db:
+    profiles: ["mock"]
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: stayops_mock
+      POSTGRES_USER: stayops
+      POSTGRES_PASSWORD: stayops
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stayops -d stayops_mock"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - stayops-mock-postgres:/var/lib/postgresql/data
+
+volumes:
+  stayops-postgres:
+  stayops-mock-postgres:

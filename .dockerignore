@@ -1,0 +1,13 @@
+.env
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+evals
+scripts/rag_evaluation.py
+scripts/mock_knowledge.py
+scripts/mock_embedding_cache.py
+scripts/seed_mock_knowledge.py
+tests

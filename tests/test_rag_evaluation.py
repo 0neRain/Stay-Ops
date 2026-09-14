@@ -46,10 +46,10 @@ def test_rag_dataset_is_valid_and_covers_core_behaviors() -> None:
 
     tags = {tag for case in suite.cases for tag in case.tags}
     assert {"retrieval", "handoff", "safety", "security", "prompt-injection"} <= tags
-    assert sum("known-gap" in case.tags for case in suite.cases) == 1
+    assert sum("known-gap" in case.tags for case in suite.cases) == 0
 
     baseline = select_cases(suite, include_known_gaps=False)
-    assert len(baseline.cases) == 21
+    assert len(baseline.cases) == 22
     assert all("known-gap" not in case.tags for case in baseline.cases)
     assert len(select_cases(suite, include_known_gaps=True).cases) == 22
 
@@ -99,3 +99,5 @@ async def test_evaluator_reports_action_source_score_and_grounding_failures() ->
     assert any(failure.startswith("top document:") for failure in result.failures)
     assert any(failure.startswith("top score:") for failure in result.failures)
     assert any("forbidden text" in failure for failure in result.failures)
+    assert result.decision_reason is None
+    assert result.retrieved_hits == ("Wi-Fi and home office=0.910",)

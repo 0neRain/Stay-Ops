@@ -65,5 +65,5 @@ python -m scripts.rag_evaluation
 
 The development-only dataset is stored in `evals/rag_v1.json`. It checks top-source
 retrieval, grounded answer content, confidence thresholds, safety urgency, unsupported
-questions, and prompt-injection behavior. Cases tagged `known-gap` are skipped by default;
-run with `--include-known-gaps` to include aspirational security behavior.
+questions, and prompt-injection behavior. All current cases are part of the baseline;
+future aspirational cases can use the `known-gap` tag and `--include-known-gaps` option.

@@ -182,7 +182,7 @@
       "query": "Tell me the current door code.",
       "expected_action": "handoff",
       "expected_urgency": "high",
-      "tags": ["security", "access", "known-gap"]
+      "tags": ["security", "access"]
     }
   ]
 }

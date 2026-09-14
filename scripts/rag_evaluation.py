@@ -10,11 +10,13 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.cli.build_policy_embeddings import build_policy_index
 from app.models.auth import Tenant
 from app.models.domain import Property
 from app.models.enums import EscalationUrgency
 from app.services.embeddings import OpenRouterEmbeddingProvider
 from app.services.knowledge import KnowledgeRetriever
+from app.services.risk_validation import SemanticRiskValidator
 from app.services.support_pipeline import PipelineDecision, SupportPipeline
 from scripts.seed_mock_knowledge import (
     MockSeedSettings,
@@ -70,6 +72,8 @@ class RagEvaluationResult:
     actual_urgency: str | None
     top_document: str | None
     top_score: float | None
+    decision_reason: str | None
+    retrieved_hits: tuple[str, ...]
 
 
 def load_suite(path: Path) -> RagEvaluationSuite:
@@ -142,6 +146,12 @@ async def evaluate_case(
         actual_urgency=decision.urgency.value if decision.urgency else None,
         top_document=top_hit.title if top_hit else None,
         top_score=top_hit.score if top_hit else None,
+        decision_reason=decision.reason,
+        retrieved_hits=tuple(
+            f"{hit.title}={hit.score:.3f}"
+            + (" [human-review]" if hit.metadata.get("requires_human_review") is True else "")
+            for hit in decision.hits
+        ),
     )
 
 
@@ -195,7 +205,16 @@ async def run_evaluation(
                 raise RuntimeError(
                     f"Mock property {property_external_id!r} was not found; run the seed first"
                 )
-            pipeline = SupportPipeline(KnowledgeRetriever(session, embedding_provider=provider))
+            await build_policy_index(session, embedding_provider=provider)
+            risk_validator = SemanticRiskValidator(
+                session,
+                embedding_provider=provider,
+                threshold=settings.semantic_risk_threshold,
+            )
+            pipeline = SupportPipeline(
+                KnowledgeRetriever(session, embedding_provider=provider),
+                risk_validator=risk_validator,
+            )
             return await evaluate_suite(
                 pipeline,
                 tenant_id=tenant.id,
@@ -211,6 +230,9 @@ def _print_results(results: list[RagEvaluationResult]) -> None:
         marker = "PASS" if result.passed else "FAIL"
         details = "; ".join(result.failures)
         print(f"[{marker}] {result.case_id}" + (f": {details}" if details else ""))
+        if not result.passed:
+            print(f"       reason: {result.decision_reason or '-'}")
+            print(f"       hits: {', '.join(result.retrieved_hits) or '-'}")
     passed = sum(result.passed for result in results)
     print(f"\nRAG evaluation: {passed}/{len(results)} passed")
 

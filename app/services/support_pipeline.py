@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal, Protocol, TypedDict
@@ -31,6 +30,7 @@ from app.services.risk_validation import (
     SemanticRiskAssessment,
     SemanticRiskValidator,
 )
+from app.services.static_risk import StaticRiskAssessment, assess_static_risk
 
 PipelineAction = Literal["answered", "handoff"]
 
@@ -39,44 +39,17 @@ class RiskValidator(Protocol):
     async def assess(self, query: str) -> SemanticRiskAssessment: ...
 
 
-_EMERGENCY_PHRASES = (
-    "break in",
-    "carbon monoxide",
-    "fire",
-    "gas leak",
-    "injured",
-    "medical emergency",
-    "someone is inside",
-    "smoke",
-)
-_HIGH_RISK_PHRASES = (
-    "access code not working",
-    "cannot get in",
-    "can't get in",
-    "cancel my reservation",
-    "cancellation",
-    "charged twice",
-    "door code not working",
-    "key is missing",
-    "locked out",
-    "payment",
-    "refund",
-)
-
-
-def _contains_phrase(value: str, phrases: tuple[str, ...]) -> bool:
-    normalized = value.casefold().replace("-", " ")
-    return any(re.search(rf"\b{re.escape(phrase)}\b", normalized) for phrase in phrases)
-
-
 class SupportState(TypedDict, total=False):
     tenant_id: UUID
     property_id: UUID
     query: str
     retrieval_hits: list[KnowledgeHit]
     retrieval_error: str | None
+    retrieval_attempted: bool
+    static_risk: StaticRiskAssessment | None
     semantic_risk: SemanticRiskAssessment | None
     semantic_validation_error: str | None
+    semantic_assessment_attempted: bool
     action: PipelineAction
     answer: str | None
     reason: str | None
@@ -97,6 +70,9 @@ class PipelineDecision:
     retrieval_error: str | None
     semantic_risk: SemanticRiskAssessment | None = None
     semantic_validation_error: str | None = None
+    static_risk: StaticRiskAssessment | None = None
+    retrieval_attempted: bool = False
+    semantic_assessment_attempted: bool = False
 
 
 @dataclass(frozen=True)
@@ -130,12 +106,20 @@ class SupportPipeline:
         self.risk_validator = risk_validator
 
         builder = StateGraph(SupportState)
+        builder.add_node("static_assess", self._static_assess)
         builder.add_node("retrieve", self._retrieve)
+        builder.add_node("semantic_assess", self._semantic_assess)
         builder.add_node("assess", self._assess)
         builder.add_node("answer", self._answer)
         builder.add_node("handoff", self._handoff)
-        builder.add_edge(START, "retrieve")
-        builder.add_edge("retrieve", "assess")
+        builder.add_edge(START, "static_assess")
+        builder.add_conditional_edges(
+            "static_assess",
+            self._route_after_static,
+            {"continue": "retrieve", "handoff": "handoff"},
+        )
+        builder.add_edge("retrieve", "semantic_assess")
+        builder.add_edge("semantic_assess", "assess")
         builder.add_conditional_edges(
             "assess",
             self._route,
@@ -144,6 +128,22 @@ class SupportPipeline:
         builder.add_edge("answer", END)
         builder.add_edge("handoff", END)
         self.graph = builder.compile()
+
+    @staticmethod
+    async def _static_assess(state: SupportState) -> SupportState:
+        static_risk = assess_static_risk(state["query"])
+        if static_risk is None:
+            return {"static_risk": None}
+        return {
+            "action": "handoff",
+            "reason": f"Static risk rule: {static_risk.category}",
+            "urgency": static_risk.urgency,
+            "static_risk": static_risk,
+        }
+
+    @staticmethod
+    def _route_after_static(state: SupportState) -> Literal["continue", "handoff"]:
+        return "handoff" if state.get("static_risk") is not None else "continue"
 
     async def _retrieve(self, state: SupportState) -> SupportState:
         try:
@@ -154,23 +154,39 @@ class SupportPipeline:
                 limit=self.retrieval_limit,
             )
         except KnowledgeRetrievalError as exc:
-            return {"retrieval_hits": [], "retrieval_error": str(exc)}
-        return {"retrieval_hits": hits, "retrieval_error": None}
+            return {
+                "retrieval_hits": [],
+                "retrieval_error": str(exc),
+                "retrieval_attempted": True,
+            }
+        return {
+            "retrieval_hits": hits,
+            "retrieval_error": None,
+            "retrieval_attempted": True,
+        }
+
+    async def _semantic_assess(self, state: SupportState) -> SupportState:
+        if state.get("retrieval_error") or self.risk_validator is None:
+            return {
+                "semantic_risk": None,
+                "semantic_validation_error": None,
+                "semantic_assessment_attempted": False,
+            }
+        try:
+            semantic_risk = await self.risk_validator.assess(state["query"])
+        except RiskValidationError as exc:
+            return {
+                "semantic_risk": None,
+                "semantic_validation_error": str(exc),
+                "semantic_assessment_attempted": True,
+            }
+        return {
+            "semantic_risk": semantic_risk,
+            "semantic_validation_error": None,
+            "semantic_assessment_attempted": True,
+        }
 
     async def _assess(self, state: SupportState) -> SupportState:
-        query = state["query"]
-        if _contains_phrase(query, _EMERGENCY_PHRASES):
-            return {
-                "action": "handoff",
-                "reason": "Potential guest safety emergency",
-                "urgency": EscalationUrgency.EMERGENCY,
-            }
-        if _contains_phrase(query, _HIGH_RISK_PHRASES):
-            return {
-                "action": "handoff",
-                "reason": "Request requires human authorization or assistance",
-                "urgency": EscalationUrgency.HIGH,
-            }
         if state.get("retrieval_error"):
             return {
                 "action": "handoff",
@@ -178,24 +194,19 @@ class SupportPipeline:
                 "urgency": EscalationUrgency.NORMAL,
             }
 
-        semantic_risk: SemanticRiskAssessment | None = None
-        if self.risk_validator is not None:
-            try:
-                semantic_risk = await self.risk_validator.assess(query)
-            except RiskValidationError as exc:
-                return {
-                    "action": "handoff",
-                    "reason": "Semantic risk validation failed",
-                    "urgency": EscalationUrgency.NORMAL,
-                    "semantic_validation_error": str(exc),
-                }
-            if semantic_risk.requires_handoff:
-                return {
-                    "action": "handoff",
-                    "reason": f"Semantic risk match: {semantic_risk.category}",
-                    "urgency": semantic_risk.urgency,
-                    "semantic_risk": semantic_risk,
-                }
+        if state.get("semantic_validation_error"):
+            return {
+                "action": "handoff",
+                "reason": "Semantic risk validation failed",
+                "urgency": EscalationUrgency.NORMAL,
+            }
+        semantic_risk = state.get("semantic_risk")
+        if semantic_risk is not None and semantic_risk.requires_handoff:
+            return {
+                "action": "handoff",
+                "reason": f"Semantic risk match: {semantic_risk.category}",
+                "urgency": semantic_risk.urgency,
+            }
 
         hits = state.get("retrieval_hits", [])
         if not hits or hits[0].score < self.minimum_retrieval_score:
@@ -205,7 +216,7 @@ class SupportPipeline:
                 "urgency": EscalationUrgency.NORMAL,
                 "semantic_risk": semantic_risk,
             }
-        if any(hit.metadata.get("requires_human_review") is True for hit in hits):
+        if hits[0].metadata.get("requires_human_review") is True:
             return {
                 "action": "handoff",
                 "reason": "Relevant knowledge requires human review",
@@ -257,6 +268,9 @@ class SupportPipeline:
             retrieval_error=result.get("retrieval_error"),
             semantic_risk=result.get("semantic_risk"),
             semantic_validation_error=result.get("semantic_validation_error"),
+            static_risk=result.get("static_risk"),
+            retrieval_attempted=result.get("retrieval_attempted", False),
+            semantic_assessment_attempted=result.get("semantic_assessment_attempted", False),
         )
 
 
@@ -396,32 +410,53 @@ async def process_guest_message(
             query=content,
         )
 
-    session.add(
-        ToolRun(
-            tenant_id=tenant_id,
-            conversation_id=conversation.id,
-            message_id=guest_message.id,
-            tool_name="knowledge.retrieve",
-            input_json={"query": content, "property_id": str(property_id)},
-            output_json=(
-                {
-                    "hits": [
-                        {"chunk_id": str(hit.chunk_id), "score": hit.score} for hit in decision.hits
-                    ]
-                }
-                if decision.retrieval_error is None
-                else None
-            ),
-            status=(
-                ToolRunStatus.FAILED
-                if decision.retrieval_error is not None
-                else ToolRunStatus.SUCCESS
-            ),
-            error_type="embedding_provider" if decision.retrieval_error else None,
-            error_message=decision.retrieval_error,
+    static_risk = decision.static_risk
+    if static_risk is not None:
+        session.add(
+            ToolRun(
+                tenant_id=tenant_id,
+                conversation_id=conversation.id,
+                message_id=guest_message.id,
+                tool_name="policy.static_risk",
+                input_json={"query": content},
+                output_json={
+                    "rule_id": static_risk.rule_id,
+                    "category": static_risk.category,
+                    "urgency": static_risk.urgency.value,
+                    "evidence": list(static_risk.evidence),
+                    "requires_handoff": True,
+                },
+                status=ToolRunStatus.SUCCESS,
+            )
         )
-    )
-    if embedding_provider is not None:
+    if decision.retrieval_attempted:
+        session.add(
+            ToolRun(
+                tenant_id=tenant_id,
+                conversation_id=conversation.id,
+                message_id=guest_message.id,
+                tool_name="knowledge.retrieve",
+                input_json={"query": content, "property_id": str(property_id)},
+                output_json=(
+                    {
+                        "hits": [
+                            {"chunk_id": str(hit.chunk_id), "score": hit.score}
+                            for hit in decision.hits
+                        ]
+                    }
+                    if decision.retrieval_error is None
+                    else None
+                ),
+                status=(
+                    ToolRunStatus.FAILED
+                    if decision.retrieval_error is not None
+                    else ToolRunStatus.SUCCESS
+                ),
+                error_type="embedding_provider" if decision.retrieval_error else None,
+                error_message=decision.retrieval_error,
+            )
+        )
+    if decision.semantic_assessment_attempted:
         semantic_risk = decision.semantic_risk
         session.add(
             ToolRun(
@@ -440,7 +475,7 @@ async def process_guest_message(
                         "requires_handoff": semantic_risk.requires_handoff,
                     }
                     if semantic_risk is not None
-                    else {"skipped": "deterministic_policy_or_retrieval_failure"}
+                    else None
                 ),
                 status=(
                     ToolRunStatus.FAILED

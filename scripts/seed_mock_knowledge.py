@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 from uuid import UUID
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
@@ -36,6 +37,7 @@ class MockSeedSettings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_embedding_api_key: str | None = None
     openrouter_embedding_model: str = "openai/text-embedding-3-small"
+    semantic_risk_threshold: float = Field(default=0.80, ge=0, le=1)
     mock_embedding_cache_path: Path = Path(".cache/mock_embeddings.sqlite3")
 
     @property

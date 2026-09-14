@@ -76,18 +76,6 @@ MOCK_KNOWLEDGE: tuple[MockDocument, ...] = (
             ),
         ),
     ),
-    MockDocument(
-        title="Human support policy",
-        document_type="support_policy",
-        chunks=(
-            (
-                "Requests involving refunds, cancellations, payments, safety, missing keys, "
-                "or failed property access must be handled by a human support agent."
-            ),
-        ),
-        global_scope=True,
-        requires_human_review=True,
-    ),
 )
 
 

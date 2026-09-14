@@ -47,8 +47,10 @@ class StaticRetriever:
 class StaticRiskValidator:
     def __init__(self, assessment: SemanticRiskAssessment) -> None:
         self.assessment = assessment
+        self.calls = 0
 
     async def assess(self, _: str) -> SemanticRiskAssessment:
+        self.calls += 1
         return self.assessment
 
 
@@ -102,20 +104,23 @@ async def test_high_semantic_risk_can_only_add_a_handoff() -> None:
         score=0.91,
         threshold=0.80,
     )
+    validator = StaticRiskValidator(assessment)
     pipeline = SupportPipeline(
         cast(Any, StaticRetriever()),
-        risk_validator=StaticRiskValidator(assessment),
+        risk_validator=validator,
     )
     decision = await pipeline.run(
         tenant_id=uuid4(),
         property_id=uuid4(),
-        query="Could you share the keypad PIN?",
+        query="Could you provide the entry credential?",
     )
 
     assert decision.action == "handoff"
     assert decision.urgency == EscalationUrgency.HIGH
     assert decision.reason == "Semantic risk match: access"
     assert decision.semantic_risk == assessment
+    assert decision.semantic_assessment_attempted
+    assert validator.calls == 1
 
 
 async def test_low_semantic_risk_does_not_override_normal_grounding_checks() -> None:
@@ -126,9 +131,10 @@ async def test_low_semantic_risk_does_not_override_normal_grounding_checks() -> 
         score=0.40,
         threshold=0.80,
     )
+    validator = StaticRiskValidator(assessment)
     pipeline = SupportPipeline(
         cast(Any, StaticRetriever()),
-        risk_validator=StaticRiskValidator(assessment),
+        risk_validator=validator,
     )
     decision = await pipeline.run(
         tenant_id=uuid4(),
@@ -139,6 +145,8 @@ async def test_low_semantic_risk_does_not_override_normal_grounding_checks() -> 
     assert decision.action == "answered"
     assert decision.answer == "Parties are not allowed."
     assert decision.semantic_risk == assessment
+    assert decision.semantic_assessment_attempted
+    assert validator.calls == 1
 
 
 async def test_semantic_validation_failure_hands_off() -> None:
@@ -155,3 +163,4 @@ async def test_semantic_validation_failure_hands_off() -> None:
     assert decision.action == "handoff"
     assert decision.reason == "Semantic risk validation failed"
     assert decision.semantic_validation_error == "Policy index unavailable"
+    assert decision.semantic_assessment_attempted

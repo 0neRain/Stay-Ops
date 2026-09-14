@@ -23,14 +23,20 @@ _STOP_WORDS = {
     "from",
     "how",
     "i",
+    "ignore",
     "in",
+    "instruction",
+    "instructions",
     "is",
     "it",
+    "may",
     "me",
     "my",
     "of",
     "on",
     "please",
+    "say",
+    "that",
     "the",
     "to",
     "we",
@@ -41,11 +47,17 @@ _STOP_WORDS = {
     "you",
 }
 _ALIASES = {
+    "allowed": "permitted",
     "arrive": "checkin",
     "arrival": "checkin",
     "depart": "checkout",
     "departure": "checkout",
+    "cat": "pet",
+    "cats": "pet",
+    "dog": "pet",
+    "dogs": "pet",
     "internet": "wifi",
+    "pets": "pet",
     "wireless": "wifi",
 }
 
@@ -160,6 +172,7 @@ class KnowledgeRetriever:
                 ),
                 KnowledgeDocument.tenant_id == tenant_id,
                 KnowledgeDocument.status == KnowledgeStatus.PUBLISHED,
+                KnowledgeDocument.document_type != "support_policy",
                 KnowledgeVersion.embedding_status == "ready",
             )
         )

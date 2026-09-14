@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import app
@@ -49,6 +50,12 @@ async def api_client(
                 raise
 
     app.dependency_overrides[get_db_session] = override_db_session
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        app_env="test",
+        openrouter_api_key=None,
+        openrouter_chat_api_key=None,
+        openrouter_embedding_api_key=None,
+    )
     try:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

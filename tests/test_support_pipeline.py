@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.models.domain import Escalation, KnowledgeChunk, Property
+from app.models.domain import Escalation, KnowledgeChunk, Property, ToolRun
 from app.models.enums import EscalationStatus
 from scripts.mock_embedding_cache import MockEmbeddingCache
 from scripts.mock_knowledge import MockDocument, seed_mock_knowledge
@@ -65,8 +65,8 @@ async def _seed_property_and_kb(
                 embedding_provider=provider,
                 embedding_cache=cache,
             )
-        assert stats.inserted_chunks == 6
-        assert stats.embedded_chunks == 6
+        assert stats.inserted_chunks == 5
+        assert stats.embedded_chunks == 5
         await session.commit()
         return property_record.id
 
@@ -157,6 +157,16 @@ async def test_refund_is_high_priority_even_when_the_kb_mentions_refunds(
     assert response.json()["action"] == "handoff"
     assert response.json()["urgency"] == "high"
 
+    async with db_session_factory() as session:
+        tool_names = list(
+            await session.scalars(
+                select(ToolRun.tool_name).where(
+                    ToolRun.conversation_id == UUID(response.json()["conversation_id"])
+                )
+            )
+        )
+    assert tool_names == ["policy.static_risk"]
+
 
 async def test_mock_seed_is_idempotent(
     db_session_factory: async_sessionmaker[AsyncSession],
@@ -192,9 +202,9 @@ async def test_mock_seed_is_idempotent(
             return first.inserted_chunks, second.inserted_chunks, count or 0
 
     first, second, count = await exercise()
-    assert first == 6
+    assert first == 5
     assert second == 0
-    assert count == 6
+    assert count == 5
 
 
 async def test_mock_seed_embeds_only_new_chunks(

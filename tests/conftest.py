@@ -1,5 +1,7 @@
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+import sys
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,8 +18,22 @@ from app.db.session import get_db_session
 from app.main import app
 
 
+def _new_selector_event_loop() -> asyncio.AbstractEventLoop:
+    return asyncio.SelectorEventLoop()
+
+
+def pytest_asyncio_loop_factories(
+    config: pytest.Config,
+    item: pytest.Item,
+) -> Mapping[str, Callable[[], asyncio.AbstractEventLoop]]:
+    del config, item
+    if sys.platform == "win32":
+        return {"selector": _new_selector_event_loop}
+    return {"default": asyncio.new_event_loop}
+
+
 @pytest.fixture
-def db_session_factory(tmp_path) -> Iterator[async_sessionmaker[AsyncSession]]:
+def db_session_factory(tmp_path: Path) -> Iterator[async_sessionmaker[AsyncSession]]:
     database_path = (tmp_path / "test.db").as_posix()
     test_engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
     session_factory = async_sessionmaker(test_engine, expire_on_commit=False, autoflush=False)

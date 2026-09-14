@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 import httpx
@@ -292,8 +293,13 @@ async def test_escalation_record_is_persisted(
 
     async def load_escalation() -> Escalation | None:
         async with db_session_factory() as session:
-            return await session.scalar(
-                select(Escalation).where(Escalation.id == UUID(response.json()["escalation_id"]))
+            return cast(
+                Escalation | None,
+                await session.scalar(
+                    select(Escalation).where(
+                        Escalation.id == UUID(response.json()["escalation_id"])
+                    )
+                ),
             )
 
     escalation = await load_escalation()

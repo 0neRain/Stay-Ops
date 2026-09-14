@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: stayops_mock
+          POSTGRES_USER: stayops
+          POSTGRES_PASSWORD: stayops
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U stayops -d stayops_mock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://stayops:stayops@localhost:5433/stayops_mock
+      MOCK_DATABASE_URL: postgresql+psycopg://stayops:stayops@localhost:5433/stayops_mock
+      RAG_EVAL_DATABASE_URL: postgresql+psycopg://stayops:stayops@localhost:5433/stayops_mock
+      OPENROUTER_EMBEDDING_MODEL: openai/text-embedding-3-small
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m mypy app scripts tests
+      - run: python -m alembic upgrade head
+      - run: python -m pytest -q

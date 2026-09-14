@@ -57,13 +57,31 @@ fails closed to handoff. Configure the calibrated cutoff with `SEMANTIC_RISK_THR
 
 ## RAG evaluation
 
-After seeding the isolated mock database, run the retrieval and routing regression suite:
+After migrating the isolated mock database, run the deterministic retrieval and routing
+regression suite using the committed OpenRouter embedding snapshot. The runner creates the
+mock scope and seeds the required knowledge and policy vectors inside the evaluation
+transaction:
 
 ```powershell
 python -m scripts.rag_evaluation
 ```
 
+To intentionally refresh the snapshot after changing the dataset, mock knowledge, policy
+examples, or embedding model, run:
+
+```powershell
+python -m scripts.capture_eval_embeddings
+```
+
+Snapshot refresh requires OpenRouter credentials. Review and commit both generated files in
+`evals/fixtures`. To compare the snapshot with the provider's current behavior, run
+`python -m scripts.rag_evaluation --embedding-mode live`.
+
 The development-only dataset is stored in `evals/rag_v1.json`. It checks top-source
 retrieval, grounded answer content, confidence thresholds, safety urgency, unsupported
 questions, and prompt-injection behavior. All current cases are part of the baseline;
 future aspirational cases can use the `known-gap` tag and `--include-known-gaps` option.
+The runner also enforces decision invariants and suite-level gates for action accuracy,
+automatic-answer precision, unsupported-request handoff, safety/access recall, retrieval
+Recall@1, Recall@k, MRR, false handoffs, and provider errors. Gate thresholds are declared
+in the dataset so changes are explicit and reviewable.

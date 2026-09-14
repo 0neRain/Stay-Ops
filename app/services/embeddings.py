@@ -79,6 +79,9 @@ class OpenRouterEmbeddingProvider:
     async def embed_query(self, text: str) -> list[float]:
         return await self._embed(text, input_type="search_query")
 
+    async def embed_queries(self, texts: list[str]) -> list[list[float]]:
+        return await self._embed_many(texts, input_type="search_query")
+
     async def embed_document(self, text: str) -> list[float]:
         return await self._embed(text, input_type="search_document")
 

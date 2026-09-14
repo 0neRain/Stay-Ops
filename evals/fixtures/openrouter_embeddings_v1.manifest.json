@@ -1,0 +1,444 @@
+{
+  "format_version": 1,
+  "provider": "openrouter",
+  "model": "openai/text-embedding-3-small",
+  "dimensions": 1536,
+  "dataset_version": "1.1.0",
+  "generated_at": "2026-09-14T16:08:15.898524Z",
+  "vectors_file": "openrouter_embeddings_v1.f32",
+  "vectors_sha256": "ae95d986e4fa2876357c88d9891daaf9e2f624a80f7ca48285923c6d2aebeee9",
+  "entries": [
+    {
+      "key": "004ca5dd3b9500bb8c639d1f50144f969b24bb4c5d9e8b9e15d103d180b89ee3",
+      "text_sha256": "b8563e55ab2464f45cbe63629c8bdc1d7011ad6c8ba13df238ed95c7f0b96cd6",
+      "input_type": "search_document",
+      "sources": [
+        "knowledge:Arrival and departure guide#0"
+      ],
+      "offset_bytes": 0
+    },
+    {
+      "key": "637161efd85b3f10541364c861ee72099d6e7d5423c1c2a76edea046dbebbf28",
+      "text_sha256": "e1d394237de2e5944425b2b32afaa2f2fde24d11f17a985c3991ce1523344b3d",
+      "input_type": "search_document",
+      "sources": [
+        "knowledge:Arrival and departure guide#1"
+      ],
+      "offset_bytes": 6144
+    },
+    {
+      "key": "b83388cbf52b1b28cfb64aa79d6341cd64263b4309120c7fb9a08f9e614cfb22",
+      "text_sha256": "6c0255f2b3a9b752bd8566d77b9073882d8035a09e54787f80c9469448f9990d",
+      "input_type": "search_document",
+      "sources": [
+        "knowledge:House rules#0"
+      ],
+      "offset_bytes": 12288
+    },
+    {
+      "key": "ecae3e277d3c403b5c089ea1aeefb1a7ea382519faf71543d444c7ddb36d64b4",
+      "text_sha256": "c1285fa0f049bba063ad9bdfea1cd0ce104099515d920df80100cfdf42536354",
+      "input_type": "search_document",
+      "sources": [
+        "knowledge:House rules#1"
+      ],
+      "offset_bytes": 18432
+    },
+    {
+      "key": "4855cd3e29a41a29fdd0ea121a3ebce6221f81e622a84dd06154ff11ad22e478",
+      "text_sha256": "ffc48a8c0ce40fde5406ad40fd0eae13e26c08b02d560b2811cda2a0f9c0930e",
+      "input_type": "search_document",
+      "sources": [
+        "knowledge:Wi-Fi and home office#0"
+      ],
+      "offset_bytes": 24576
+    },
+    {
+      "key": "7cbe55203814dc5949de8c4c13a27c2d6fd2d96150cad0dcf883aa0dfe2aaa0d",
+      "text_sha256": "778395d633d7475bdbda4a25e93576a2643b60cfdb2e5e94a6f9cd716b023adc",
+      "input_type": "search_document",
+      "sources": [
+        "policy:access-01"
+      ],
+      "offset_bytes": 30720
+    },
+    {
+      "key": "99352997e1dfcf3199dcdefe51ddef3222e3405a164104ed40dd44368d2f3edf",
+      "text_sha256": "2ea67c2beaca982bd20ff534a9456b84803ece52d8a506577f8cac832c114d84",
+      "input_type": "search_document",
+      "sources": [
+        "policy:access-02"
+      ],
+      "offset_bytes": 36864
+    },
+    {
+      "key": "2469868606dbc8f7fbf9429b37bca5ad447bd151f5c6dfcac5425ce51d4d91f1",
+      "text_sha256": "58c010bb26b37839b1f728d52dd5ce21f06a87907faa2fa0b75d0f621eddf854",
+      "input_type": "search_document",
+      "sources": [
+        "policy:access-03"
+      ],
+      "offset_bytes": 43008
+    },
+    {
+      "key": "ccca39e96063c32719a9df63ec7fc7199cc2eeaa177b77e80896a76ff5ea308e",
+      "text_sha256": "27f1b1bb91969357286ca3b02769314493e5693de14c23d383fec3c2baedecba",
+      "input_type": "search_document",
+      "sources": [
+        "policy:access-04"
+      ],
+      "offset_bytes": 49152
+    },
+    {
+      "key": "6c4aaedb5210b2f5904f118e70a4fa84bee96f957a49b9408cacda4806a77e65",
+      "text_sha256": "09fe284ffbebd80bbd4b992be199654e3613f30653c399b0ef9b07a5f33c8081",
+      "input_type": "search_document",
+      "sources": [
+        "policy:access-05"
+      ],
+      "offset_bytes": 55296
+    },
+    {
+      "key": "ce33f6385f9c52c407247243c8cde4ae6ead20d78fd5f80436e4e1e929168747",
+      "text_sha256": "daff4c5947210386b98e05021cc24aeab8345d172dabee6010d440b94e255b1d",
+      "input_type": "search_document",
+      "sources": [
+        "policy:cancellation-01"
+      ],
+      "offset_bytes": 61440
+    },
+    {
+      "key": "26289053dfb451548aac64887064b570bd6640a5609dc1f41804b7d045a0a9cc",
+      "text_sha256": "78f37a31403243d998792bcf29ba5b3edd3e501d9cb2ccab24b047e1a8b0fc9a",
+      "input_type": "search_document",
+      "sources": [
+        "policy:cancellation-02"
+      ],
+      "offset_bytes": 67584
+    },
+    {
+      "key": "d7fe64fad515e4750c954c8607396e36571dcdffc815d725c2c53916c5d07f32",
+      "text_sha256": "4349dbff86b43917a94de7a693b59ea4069896afb93be9ed5810fb6892d15176",
+      "input_type": "search_document",
+      "sources": [
+        "policy:cancellation-03"
+      ],
+      "offset_bytes": 73728
+    },
+    {
+      "key": "dd2402372efde33264d68464a06d2c33eaf57a6f8b11b8b652ec48aabc379673",
+      "text_sha256": "d1d1e13c6ba68864b6bc271195c638ebe662c69f786afbcdbd0edf43665fe94b",
+      "input_type": "search_document",
+      "sources": [
+        "policy:payment-01"
+      ],
+      "offset_bytes": 79872
+    },
+    {
+      "key": "86d244d0dc8fe8ba819e3c1514d40cd55f5559a8f62024e2c6a15772d2ff065c",
+      "text_sha256": "ff936b7e7e45e35b76755602c436e776681ee36bd49f80c8b6a0cf8b2c715ff4",
+      "input_type": "search_document",
+      "sources": [
+        "policy:payment-02"
+      ],
+      "offset_bytes": 86016
+    },
+    {
+      "key": "f77dc16e8743b50902e9b9d6fa2c5e09126e7fc8ff863f484f3505a02ee2f8a8",
+      "text_sha256": "666b8db037685266c0eda543e76a16342be5e8e826af09b2687670fd5315e6d7",
+      "input_type": "search_document",
+      "sources": [
+        "policy:payment-03"
+      ],
+      "offset_bytes": 92160
+    },
+    {
+      "key": "6e71d3b92833b9e4ca591d72e9e497db928e5c8aa35022746376e14a053d0c90",
+      "text_sha256": "d220c189e2be132312de9611613f2e84399e65deadeddb355e1fdd5f93164e70",
+      "input_type": "search_document",
+      "sources": [
+        "policy:refund-01"
+      ],
+      "offset_bytes": 98304
+    },
+    {
+      "key": "95ff831ee229cee1a44ae2ee96595a06ddd1d41161719311e4593099fe62dc9b",
+      "text_sha256": "d36cf68bc832d50f75c74b603ad01b517b21728459e03b4af8253eff7873af28",
+      "input_type": "search_document",
+      "sources": [
+        "policy:refund-02"
+      ],
+      "offset_bytes": 104448
+    },
+    {
+      "key": "70124ad5a664fb0e5368a7bd0a265c4bcecc0def4eb687eb97f2889429ee85ac",
+      "text_sha256": "4dcf002192c45e1ca54f3030f89ad13c5577eb38e3cbc33b27197840ceaabca8",
+      "input_type": "search_document",
+      "sources": [
+        "policy:refund-03"
+      ],
+      "offset_bytes": 110592
+    },
+    {
+      "key": "f4a23cbfbdd5422f905b71bc40b03f2a77180b9254d91e8268137bea9568e00c",
+      "text_sha256": "59a009b99879cef564e6b732843e4e4fa7d51d052f92717546d81d976699a469",
+      "input_type": "search_document",
+      "sources": [
+        "policy:refund-04"
+      ],
+      "offset_bytes": 116736
+    },
+    {
+      "key": "926ec3dcaa229ed0be27b9c8b9808d318897800577a60460d0070e1f92a30aa2",
+      "text_sha256": "6cb09f993901dd096eb105980080bbaaa7e81908ddc825393f3d8a5e63df24ea",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-01"
+      ],
+      "offset_bytes": 122880
+    },
+    {
+      "key": "e3c0a40d5724412e8359ab4a1f6dce27f94c0a76069800b5d3e94f7f22aa84f1",
+      "text_sha256": "f651425d92bac803d5a37516ddec703ce51f65615e944e71cc87ab867039f05c",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-02"
+      ],
+      "offset_bytes": 129024
+    },
+    {
+      "key": "03a1c2b3f97d78746db36eaf7e8b4baa4a8cc4c62d92dc332970d0a7aa4d98f9",
+      "text_sha256": "6751e7f61585dbdf055e3b90531f0a7115899dc641b79515afe859a6b056941f",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-03"
+      ],
+      "offset_bytes": 135168
+    },
+    {
+      "key": "28ac403ec4cf064535a394b000a811d46e0ea6dafaaa98d36b6e276864dec760",
+      "text_sha256": "1edd75e87e7b62a3e53856676f07802085c09b6f6f84c570115014cd4ee3b8e1",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-04"
+      ],
+      "offset_bytes": 141312
+    },
+    {
+      "key": "8e4b84a73671729464c1c4bfef4733057f5afed09206dfde2e7058456f3305d0",
+      "text_sha256": "ed26e2962337cd0666cdfa9a6c04ab71f234204af9aad5e7395c3cd5ed4e7b14",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-05"
+      ],
+      "offset_bytes": 147456
+    },
+    {
+      "key": "8daa11fd74fff0e4b28d5f430ddf00f9b21affa5509196289ae078e59989512f",
+      "text_sha256": "bc2e296b451d6340eb691cb113129b0783a9557f93d04a17522f30585869c3a1",
+      "input_type": "search_document",
+      "sources": [
+        "policy:safety-06"
+      ],
+      "offset_bytes": 153600
+    },
+    {
+      "key": "3d1b78eb435ae8db19eda05db6cc833c684158c35c765bfaa3d9ad01a61339eb",
+      "text_sha256": "ea7ee226da3e2b759dddbc98c729768836aba247e64580215a02fcbc256e7df3",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:cancellation-request"
+      ],
+      "offset_bytes": 159744
+    },
+    {
+      "key": "3a3c9559d5db5c62f1dc03db521e25f755ffcfcb8440177ed517e12ea5119178",
+      "text_sha256": "98728dd0dcb685d859c0233ee8435a449b645ef175a1a9700fc142c892b44dc1",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:checkin-semantic-paraphrase"
+      ],
+      "offset_bytes": 165888
+    },
+    {
+      "key": "f5801350379792696645bef7453400c73f6c6b05bba74f538ff1ca40d74425de",
+      "text_sha256": "d94815a082b655adff2c714f8c88bba46628def06d6cfb1a5f7b13a05aa4edec",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:checkin-time-direct"
+      ],
+      "offset_bytes": 172032
+    },
+    {
+      "key": "91b271c615646566054a9cb42ff3eb6c0bac0ffbbf67bf8e293198bcca153d2e",
+      "text_sha256": "93f28dd51f90190a5763f72d3ec37ba1f4643b7f83aa27765eb8019f3f3d1946",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:checkout-procedure"
+      ],
+      "offset_bytes": 178176
+    },
+    {
+      "key": "131d87a64cd7dba4de660a1fa8c75e3e673dfd17797ed8b96224e059ab660e98",
+      "text_sha256": "5366305bbe54122945dad9be05bfb6a447386d08eee33da466bf6c4eb59024f9",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:checkout-time-direct"
+      ],
+      "offset_bytes": 184320
+    },
+    {
+      "key": "7498aaeac4a67ff5fc3714fd4e19932b03d207d4144adc25b29c6813dbbcde6d",
+      "text_sha256": "325afd5f09fbfd18dd7077cedb82e8ac1a992213970afedaba6f32c83e23ca3b",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:door-code-failure"
+      ],
+      "offset_bytes": 190464
+    },
+    {
+      "key": "1c11848161bf0fa6d7d99faea7b2c18df919580b78a6da758d810db7271d0d15",
+      "text_sha256": "6f8ca77f54ec3a1e603d2799d9f3acb1fe0cee5e336fbef303fe22e5b1768d67",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:early-checkin-condition"
+      ],
+      "offset_bytes": 196608
+    },
+    {
+      "key": "40edcd83a2cf501e1fb29a3c3bf642b386f78c9a4bea4cc3f4f43c590a5a6180",
+      "text_sha256": "b38bf4e51f6bb61df30a5809a276a353b563e1ebb6ad9fe1c44f33d2906ef296",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:gas-leak-emergency"
+      ],
+      "offset_bytes": 202752
+    },
+    {
+      "key": "61c9a3b6770543a5ff0b6c72f04a78810fb35466d4dd07914e7c7128b78dac23",
+      "text_sha256": "191978bad6f25c2d8cf638c70228b307c089cd0bee19af940daf492c1f263fbf",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:locked-out"
+      ],
+      "offset_bytes": 208896
+    },
+    {
+      "key": "d75a5520e3f6866608d729bba93a8d2ba406c949478beb8e27f3cad5c2d79279",
+      "text_sha256": "36fb232c102d33f03a966f07ad3391fc86473a346ae82eef819ac9dc2ce13105",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:pet-policy"
+      ],
+      "offset_bytes": 215040
+    },
+    {
+      "key": "abb6f9bb8e9f826a99ab2daed485a1acd8035da51f738f00ce2563fc7506ae57",
+      "text_sha256": "38feaed18945f6d13ed06d920f81758e016e98b27641e5fa560bee3f487e45fe",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:prompt-injection-house-rules"
+      ],
+      "offset_bytes": 221184
+    },
+    {
+      "key": "6c807a571534e1a7334dede90e51f1890a8fa2384e78491786701efff920fc33",
+      "text_sha256": "2d264f76ee2eb83ccba74e31aaed678d013d4ebac2cd3a2cd8505da4696b4dd0",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:quiet-hours"
+      ],
+      "offset_bytes": 227328
+    },
+    {
+      "key": "203f093d54d692bbc359cdded4ced3bd1c1fc5244430b643e4cf54e3521c4aee",
+      "text_sha256": "8eafedf3b10d5b4088716049a01abe840ea202adfd5a4a13dde544be9949b935",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:refund-request"
+      ],
+      "offset_bytes": 233472
+    },
+    {
+      "key": "33fc2d78de4a4a6710c87173276ec98bd4f73dcb111fa10dec6e61c7ce86e513",
+      "text_sha256": "b7f4c8f5ad92fdf4019394ee2458b557021754b17e5805d45fe5eee03d52313e",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:router-recovery"
+      ],
+      "offset_bytes": 239616
+    },
+    {
+      "key": "b7d5ccb957276d75d1c201d0dfed2e340d99daf2c94675d322af9a4a54d9e8ce",
+      "text_sha256": "2faeeeaf5dbccf5b80b95aec46ac73307c8340ab4bb36688c0d67943e47060bf",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:smoke-emergency"
+      ],
+      "offset_bytes": 245760
+    },
+    {
+      "key": "cc80d3ad3d07dfa5fa3a9a7f4ee9906ae06c4f27347a16ec23985429b582bcea",
+      "text_sha256": "d4e174196c878000a378bbf7a9d275b354c1b5baa14258b5b0529ce49f13c1d4",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:smoking-policy"
+      ],
+      "offset_bytes": 251904
+    },
+    {
+      "key": "06e5b642ee72ed0b98e2ab933545b235907990764c1f7d2fb8cd9c4655a90f98",
+      "text_sha256": "43a794a2e373379f819cfe3ff4ea1da71a9a94b6384353383b2c1ec72961c012",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:unsupported-helicopter"
+      ],
+      "offset_bytes": 258048
+    },
+    {
+      "key": "3b8724999aa59adb6ad82b2f0b3a4a92b1f0c817846314577d495a0288cde50e",
+      "text_sha256": "22db45914605ae01c0c626e3d53ed6ffd088c3d5a9fe866af613cfbb63230540",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:unsupported-pool"
+      ],
+      "offset_bytes": 264192
+    },
+    {
+      "key": "b8696ecf1db4b8612291d9667d2615cf2b78b311d72c7a2dd90d464a5bd01b14",
+      "text_sha256": "654f0981a6f06d0ca3dc95416a86a540e4f0fdab514399a376d17d16bf17de55",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:unverified-door-code-request"
+      ],
+      "offset_bytes": 270336
+    },
+    {
+      "key": "8fdfeecfdf5dfdcc94ff5947a4aac3a65ad3060fd16678701dc3c4ec8257556d",
+      "text_sha256": "15ce622eea66a6a035126210a3630bc934598f3b162a2b12ff2dc95e99f37377",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:waste-sorting"
+      ],
+      "offset_bytes": 276480
+    },
+    {
+      "key": "103f9fca0a4205b31c95dc8b47c5062ce3233659b4679bd777d2b300292c9c9e",
+      "text_sha256": "423954438a3499578b5e17d8a0142340aaba380705b0fd5860978e9b8f644890",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:wifi-network-paraphrase"
+      ],
+      "offset_bytes": 282624
+    },
+    {
+      "key": "fcbaf63ea929bcbb6dc739295cdc3d26928488ef9e7c56a68e354231d7bbd2d9",
+      "text_sha256": "11d693ed1b346b9d00077e5a70beffe756509298ddd620195a77b856bf4b29d3",
+      "input_type": "search_query",
+      "sources": [
+        "evaluation:wifi-password-direct"
+      ],
+      "offset_bytes": 288768
+    }
+  ]
+}

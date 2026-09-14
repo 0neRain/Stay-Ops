@@ -64,7 +64,7 @@ def ensure_mock_database(database_url: str) -> None:
         raise RuntimeError("MOCK_DATABASE_URL must point to a PostgreSQL mock database")
 
 
-async def _get_or_create_scope(
+async def get_or_create_mock_scope(
     session: AsyncSession,
     *,
     tenant_slug: str,
@@ -116,7 +116,7 @@ async def seed(
     try:
         with MockEmbeddingCache(settings.mock_embedding_cache_path) as embedding_cache:
             async with session_factory() as session:
-                tenant, property_record = await _get_or_create_scope(
+                tenant, property_record = await get_or_create_mock_scope(
                     session,
                     tenant_slug=tenant_slug,
                     property_external_id=property_external_id,

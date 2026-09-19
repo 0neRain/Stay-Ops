@@ -461,6 +461,23 @@ button { color: inherit; }
 .document-state { width: 9px; height: 9px; border-radius: 50%; background: var(--yellow); }
 .document-state.needs_review { background: var(--teal); }
 .document-state.failed { background: var(--danger); }
+.ingestion-progress { display: grid; margin-top: 18px; padding: 16px 17px; gap: 10px; border: 1px solid #dbe2db; border-radius: 12px; background: #fafbf8; }
+.ingestion-progress[hidden] { display: none; }
+.ingestion-progress-head, .ingestion-progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ingestion-progress-head strong { font-size: .78rem; }
+.ingestion-progress-head span { color: var(--teal); font-size: .72rem; font-weight: 820; font-variant-numeric: tabular-nums; }
+.ingestion-progress-track { overflow: hidden; height: 9px; border-radius: 999px; background: #e6eae4; }
+.ingestion-progress-fill { position: relative; display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--teal), #3b9789); transition: width .45s ease; }
+.ingestion-progress-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 25%, rgba(255,255,255,.34) 45%, transparent 65%); animation: progress-shimmer 1.7s linear infinite; transform: translateX(-100%); }
+.ingestion-progress-meta { color: var(--muted); font-size: .67rem; }
+.ingestion-progress-meta span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ingestion-progress-meta span:last-child { flex: 0 0 auto; font-weight: 720; font-variant-numeric: tabular-nums; }
+.ingestion-progress.complete .ingestion-progress-fill { background: var(--teal); }
+.ingestion-progress.complete .ingestion-progress-fill::after, .ingestion-progress.failed .ingestion-progress-fill::after { display: none; }
+.ingestion-progress.failed { border-color: #efd1cc; background: #fff8f6; }
+.ingestion-progress.failed .ingestion-progress-head span { color: var(--danger); }
+.ingestion-progress.failed .ingestion-progress-fill { background: var(--danger); }
+@keyframes progress-shimmer { to { transform: translateX(100%); } }
 .flow-error { display: none; margin-top: 16px; padding: 11px 13px; border-radius: 8px; background: #fff0ed; color: var(--danger); font-size: .8rem; }
 .flow-error.show { display: block; }
 .flow-actions { display: flex; margin: 30px -34px 0; padding: 19px 34px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); background: #faf9f5; }
@@ -497,6 +514,8 @@ button { color: inherit; }
   .privacy-chip, .method-chip { align-self: flex-start; }
   .upload-form { padding: 20px 20px 0; }
   .upload-dropzone { min-height: 205px; padding: 25px 15px; }
+  .ingestion-progress-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .ingestion-progress-meta span:first-child { white-space: normal; }
   .flow-actions { margin-right: -20px; margin-left: -20px; padding: 16px 20px; gap: 10px; }
   .flow-actions .btn { flex: 1; padding-right: 10px; padding-left: 10px; }
   .review-form { padding: 0 20px; }

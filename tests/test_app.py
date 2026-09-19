@@ -24,8 +24,11 @@ async def test_frontend_routes_serve_the_application() -> None:
 
     assert stylesheet.status_code == 200
     assert "text/css" in stylesheet.headers["content-type"]
+    assert ".ingestion-progress-track" in stylesheet.text
     assert script.status_code == 200
     assert "javascript" in script.headers["content-type"]
+    assert 'aria-label="Document ingestion progress"' in script.text
+    assert "formatIngestionEta" in script.text
 
 
 async def test_auth_routes_are_in_openapi_schema() -> None:

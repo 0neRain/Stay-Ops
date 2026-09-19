@@ -403,6 +403,122 @@ function documentStatusLabel(status) {
   return labels[status] || status;
 }
 
+const ingestionStageLabels = {
+  queued: "Queued on the server",
+  reading_file: "Reading the uploaded file",
+  extracting_text: "Extracting document text",
+  chunking: "Preparing searchable sections",
+  embedding: "Building the search index",
+  embedding_deferred: "Preparing document storage",
+  saving: "Saving the processed document",
+  complete: "Document ready",
+  failed: "Processing failed",
+};
+
+const extractionStageLabels = {
+  extracting_profile: "Extracting home details",
+  saving_profile: "Saving the home profile",
+  complete: "Home profile ready",
+};
+
+function formatIngestionEta(seconds) {
+  if (seconds === null || seconds === undefined) return "Calculating ETA…";
+  if (seconds <= 4) return "Finishing up…";
+  if (seconds < 60) return `About ${seconds} sec left`;
+  const minutes = Math.ceil(seconds / 60);
+  return `About ${minutes} min left`;
+}
+
+function createIngestionProgress(files) {
+  const panel = document.querySelector("#ingestion-progress");
+  const track = panel?.querySelector(".ingestion-progress-track");
+  const fill = panel?.querySelector(".ingestion-progress-fill");
+  const label = panel?.querySelector("#ingestion-progress-label");
+  const detail = panel?.querySelector("#ingestion-progress-detail");
+  const percentage = panel?.querySelector("#ingestion-progress-percent");
+  const eta = panel?.querySelector("#ingestion-progress-eta");
+  let renderedPercent = 0;
+
+  function renderProgress(nextPercent, nextLabel, nextDetail, etaSeconds) {
+    if (!panel || !track || !fill || !label || !detail || !percentage || !eta) return;
+    renderedPercent = Math.max(renderedPercent, Math.max(0, Math.min(100, nextPercent)));
+    const roundedPercent = Math.round(renderedPercent);
+    const etaText = formatIngestionEta(etaSeconds);
+    panel.hidden = false;
+    panel.classList.remove("failed", "complete");
+    label.textContent = nextLabel;
+    detail.textContent = nextDetail;
+    track.setAttribute("aria-valuenow", String(roundedPercent));
+    track.setAttribute("aria-valuetext", `${roundedPercent}% — ${etaText}`);
+    fill.style.width = `${roundedPercent}%`;
+    percentage.textContent = `${roundedPercent}%`;
+    eta.textContent = etaText;
+  }
+
+  return {
+    uploading(index, file) {
+      const completedPercent = files.length ? (index / files.length) * 85 : 0;
+      renderProgress(
+        completedPercent,
+        `Uploading document ${index + 1} of ${files.length}`,
+        file.name,
+        null,
+      );
+    },
+    update(index, file, document) {
+      const serverPercent = Number(document.processing_progress) || 0;
+      const overallPercent = files.length
+        ? (((index * 100 + serverPercent) / (files.length * 100)) * 85)
+        : serverPercent * 0.85;
+      const stage = ingestionStageLabels[document.processing_stage] || documentStatusLabel(document.processing_status);
+      renderProgress(
+        overallPercent,
+        `${stage} · ${index + 1} of ${files.length}`,
+        file.name,
+        document.processing_eta_seconds,
+      );
+    },
+    buildingProfile() {
+      renderProgress(
+        85,
+        "Documents ingested",
+        "Waiting for profile extraction to start…",
+        null,
+      );
+    },
+    updateExtraction(draft) {
+      const serverPercent = Number(draft.extraction_progress) || 0;
+      const overallPercent = 85 + serverPercent * 0.15;
+      const stage = extractionStageLabels[draft.extraction_stage] || "Building your home profile";
+      renderProgress(
+        overallPercent,
+        stage,
+        "Turning the extracted details into a reviewable form",
+        draft.extraction_eta_seconds,
+      );
+    },
+    complete() {
+      if (!panel || !track || !fill || !label || !detail || !percentage || !eta) return;
+      panel.classList.add("complete");
+      label.textContent = "Documents ready";
+      detail.textContent = "Opening your review…";
+      track.setAttribute("aria-valuenow", "100");
+      track.setAttribute("aria-valuetext", "100% — Complete");
+      fill.style.width = "100%";
+      percentage.textContent = "100%";
+      eta.textContent = "Complete";
+    },
+    fail(message) {
+      if (!panel || !track || !label || !detail || !eta) return;
+      panel.classList.add("failed");
+      label.textContent = "Processing stopped";
+      detail.textContent = message || "The documents could not be processed.";
+      eta.textContent = "";
+      track.setAttribute("aria-valuetext", "Processing failed");
+    },
+  };
+}
+
 function uploadStepMarkup(draft) {
   const documents = draft.documents || [];
   return `
@@ -413,6 +529,11 @@ function uploadStepMarkup(draft) {
         <span class="upload-icon">${icon("upload")}</span><strong>Drop documents here or choose files</strong><span>House manual, check-in guide, house rules, appliance notes…</span>
       </label>
       <div class="selected-files" id="selected-files"></div>
+      <section class="ingestion-progress" id="ingestion-progress" hidden>
+        <div class="ingestion-progress-head"><strong id="ingestion-progress-label" aria-live="polite">Preparing documents</strong><span id="ingestion-progress-percent">0%</span></div>
+        <div class="ingestion-progress-track" role="progressbar" aria-label="Document ingestion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="ingestion-progress-fill"></span></div>
+        <div class="ingestion-progress-meta"><span id="ingestion-progress-detail">Starting upload…</span><span id="ingestion-progress-eta">Estimating time…</span></div>
+      </section>
       ${documents.length ? `<div class="existing-documents"><h3>Documents in this draft</h3>${documents.map((document) => `<div class="document-row"><span class="document-file-icon">${icon("file", "icon icon-sm")}</span><span><strong>${escapeHtml(document.filename || "Document")}</strong><small>${document.processing_error ? escapeHtml(document.processing_error) : documentStatusLabel(document.processing_status)}</small></span><i class="document-state ${document.processing_status}"></i></div>`).join("")}</div>` : ""}
       <div class="flow-error" id="home-flow-error" role="alert"></div>
       <div class="flow-actions"><a class="btn btn-ghost" href="/dashboard" data-link>Cancel</a><button class="btn btn-primary" id="process-documents" type="submit">Extract home details ${icon("arrow", "icon icon-sm")}</button></div>
@@ -542,6 +663,17 @@ async function waitForDocument(documentId, onUpdate) {
   throw new Error("Document processing took too long. You can safely return and try again.");
 }
 
+async function monitorHomeExtraction(propertyId, progress, isFinished) {
+  while (!isFinished()) {
+    const draft = await apiRequest(`/api/v1/properties/${propertyId}/onboarding`);
+    if (draft.status === "extracting" || draft.status === "review") {
+      progress.updateExtraction(draft);
+    }
+    if (draft.status === "review") return;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+}
+
 async function handleHomeDocuments(event) {
   event.preventDefault();
   if (state.homeOnboarding.uploading) return;
@@ -556,25 +688,51 @@ async function handleHomeDocuments(event) {
   }
   state.homeOnboarding.uploading = true;
   button.disabled = true;
+  button.textContent = "Processing documents…";
   errorBox.classList.remove("show");
+  const files = [...state.homeOnboarding.selectedFiles];
+  const progress = createIngestionProgress(files);
   try {
-    for (const file of state.homeOnboarding.selectedFiles) {
-      button.textContent = `Uploading ${file.name}…`;
+    for (const [index, file] of files.entries()) {
+      progress.uploading(index, file);
       const body = new FormData();
       body.append("file", file);
       body.append("title", file.name.replace(/\.[^.]+$/, ""));
       body.append("document_type", inferDocumentType(file.name));
       body.append("property_id", draft.id);
       const uploaded = await apiRequest("/api/v1/knowledge/documents", { method: "POST", body });
-      button.textContent = `Reading ${file.name}…`;
-      const processed = await waitForDocument(uploaded.id, () => {});
+      progress.update(index, file, uploaded);
+      const processed = await waitForDocument(
+        uploaded.id,
+        (document) => progress.update(index, file, document),
+      );
       if (processed.processing_status === "failed") throw new Error(`${file.name}: ${processed.processing_error}`);
     }
     button.textContent = "Building your form…";
-    const extracted = await apiRequest(`/api/v1/properties/${draft.id}/onboarding/extract`, { method: "POST" });
+    progress.buildingProfile();
+    let extractionFinished = false;
+    const extractionRequest = apiRequest(
+      `/api/v1/properties/${draft.id}/onboarding/extract`,
+      { method: "POST" },
+    );
+    const extractionMonitor = monitorHomeExtraction(
+      draft.id,
+      progress,
+      () => extractionFinished,
+    );
+    let extracted;
+    try {
+      extracted = await extractionRequest;
+      progress.updateExtraction(extracted);
+    } finally {
+      extractionFinished = true;
+      await extractionMonitor.catch(() => {});
+    }
+    progress.complete();
     state.homeOnboarding.selectedFiles = [];
     renderReviewStep(extracted);
   } catch (error) {
+    progress.fail(error.message);
     errorBox.textContent = error.message || "The documents could not be processed.";
     errorBox.classList.add("show");
     button.disabled = false;
@@ -685,7 +843,6 @@ function handleMessage(event) {
   conversations[state.selectedThread].messages.push({ from: "human", text, time: now });
   input.value = "";
   selectThread(state.selectedThread);
-  toast("Reply added to the conversation");
 }
 
 async function handleAuth(event) {

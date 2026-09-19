@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -76,6 +77,16 @@ async def _document_response(
             )
             or 0
         )
+    eta_seconds = document.processing_eta_seconds
+    if eta_seconds is not None and document.processing_status in {
+        DocumentProcessingStatus.UPLOADED,
+        DocumentProcessingStatus.PROCESSING,
+    }:
+        updated_at = document.updated_at
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        eta_seconds = max(0, eta_seconds - int((now - updated_at).total_seconds()))
     return DocumentResponse(
         id=document.id,
         property_id=document.property_id,
@@ -83,6 +94,9 @@ async def _document_response(
         document_type=document.document_type,
         status=document.status,
         processing_status=document.processing_status,
+        processing_progress=document.processing_progress,
+        processing_stage=document.processing_stage,
+        processing_eta_seconds=eta_seconds,
         original_filename=document.original_filename,
         media_type=document.media_type,
         size_bytes=document.size_bytes,
@@ -138,6 +152,9 @@ async def upload_document(
         document_type=normalized_type,
         status=KnowledgeStatus.DRAFT,
         processing_status=DocumentProcessingStatus.UPLOADED,
+        processing_progress=0,
+        processing_stage="queued",
+        processing_eta_seconds=20,
         uploaded_by_id=context.user.id,
     )
     session.add(document)
@@ -183,6 +200,7 @@ async def upload_document(
     finally:
         await file.close()
 
+    await session.refresh(document)
     response = await _document_response(document, session)
     background_tasks.add_task(queue.process, document.id)
     return response

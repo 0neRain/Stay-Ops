@@ -363,9 +363,26 @@ class InProcessDocumentQueue:
         }:
             return None
         document.processing_status = DocumentProcessingStatus.PROCESSING
+        document.processing_progress = 5
+        document.processing_stage = "reading_file"
+        document.processing_eta_seconds = 15
         document.processing_error = None
         await session.commit()
         return document
+
+    @staticmethod
+    async def _record_progress(
+        session: AsyncSession,
+        document: KnowledgeDocument,
+        *,
+        progress: int,
+        stage: str,
+        eta_seconds: int,
+    ) -> None:
+        document.processing_progress = max(0, min(99, progress))
+        document.processing_stage = stage
+        document.processing_eta_seconds = max(0, eta_seconds)
+        await session.commit()
 
     async def _process_claimed_document(
         self, session: AsyncSession, document: KnowledgeDocument
@@ -380,18 +397,47 @@ class InProcessDocumentQueue:
         if hashlib.sha256(data).hexdigest() != document.file_sha256:
             raise DocumentProcessingError("The stored document failed its integrity check")
 
+        await self._record_progress(
+            session,
+            document,
+            progress=20,
+            stage="extracting_text",
+            eta_seconds=12,
+        )
         text = await asyncio.to_thread(
             extract_document_text,
             data,
             filename=document.original_filename,
             maximum_characters=self._settings.document_max_extracted_characters,
         )
+        await self._record_progress(
+            session,
+            document,
+            progress=45,
+            stage="chunking",
+            eta_seconds=8,
+        )
         chunks = chunk_text(
             text,
             maximum_characters=self._settings.document_chunk_characters,
             overlap=self._settings.document_chunk_overlap,
         )
-        embeddings, embedding_status = await self._embed_chunks(chunks)
+        embedding_batches = max(1, (len(chunks) + EMBEDDING_BATCH_SIZE - 1) // EMBEDDING_BATCH_SIZE)
+        await self._record_progress(
+            session,
+            document,
+            progress=55,
+            stage="embedding",
+            eta_seconds=embedding_batches * 4 + 3,
+        )
+        embeddings, embedding_status = await self._embed_chunks(session, document, chunks)
+        await self._record_progress(
+            session,
+            document,
+            progress=92,
+            stage="saving",
+            eta_seconds=2,
+        )
         current_version = await session.scalar(
             select(func.coalesce(func.max(KnowledgeVersion.version), 0)).where(
                 KnowledgeVersion.document_id == document.id
@@ -433,6 +479,9 @@ class InProcessDocumentQueue:
         )
         document.status = KnowledgeStatus.PENDING_REVIEW
         document.processing_status = DocumentProcessingStatus.NEEDS_REVIEW
+        document.processing_progress = 100
+        document.processing_stage = "complete"
+        document.processing_eta_seconds = 0
         document.processed_at = datetime.now(timezone.utc)
         document.processing_error = None
         session.add(
@@ -450,15 +499,46 @@ class InProcessDocumentQueue:
         )
         await session.commit()
 
-    async def _embed_chunks(self, chunks: list[str]) -> tuple[list[list[float] | None], str]:
+    async def _embed_chunks(
+        self,
+        session: AsyncSession,
+        document: KnowledgeDocument,
+        chunks: list[str],
+    ) -> tuple[list[list[float] | None], str]:
         if self._embedding_provider is None:
+            await self._record_progress(
+                session,
+                document,
+                progress=88,
+                stage="embedding_deferred",
+                eta_seconds=3,
+            )
             return [None] * len(chunks), "pending"
         try:
             embeddings: list[list[float] | None] = []
             for start in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
                 batch = chunks[start : start + EMBEDDING_BATCH_SIZE]
                 embeddings.extend(await self._embedding_provider.embed_documents(batch))
+                completed = min(start + len(batch), len(chunks))
+                progress = 55 + round(33 * completed / len(chunks))
+                remaining_batches = (
+                    len(chunks) - completed + EMBEDDING_BATCH_SIZE - 1
+                ) // EMBEDDING_BATCH_SIZE
+                await self._record_progress(
+                    session,
+                    document,
+                    progress=progress,
+                    stage="embedding",
+                    eta_seconds=remaining_batches * 4 + 3,
+                )
         except EmbeddingProviderError:
+            await self._record_progress(
+                session,
+                document,
+                progress=88,
+                stage="embedding_deferred",
+                eta_seconds=3,
+            )
             return [None] * len(chunks), "pending"
         return embeddings, "ready"
 
@@ -470,6 +550,8 @@ class InProcessDocumentQueue:
             str(exc) if isinstance(exc, DocumentProcessingError) else "Document processing failed"
         )
         document.processing_status = DocumentProcessingStatus.FAILED
+        document.processing_stage = "failed"
+        document.processing_eta_seconds = None
         document.processing_error = detail[:1000]
         document.processed_at = datetime.now(timezone.utc)
         session.add(

@@ -13,6 +13,9 @@ class DocumentResponse(BaseModel):
     document_type: str
     status: KnowledgeStatus
     processing_status: DocumentProcessingStatus
+    processing_progress: int
+    processing_stage: str
+    processing_eta_seconds: int | None
     original_filename: str | None
     media_type: str | None
     size_bytes: int | None

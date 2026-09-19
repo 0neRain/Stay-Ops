@@ -261,6 +261,9 @@ class KnowledgeDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=DocumentProcessingStatus.UPLOADED,
     )
+    processing_progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processing_stage: Mapped[str] = mapped_column(String(80), nullable=False, default="queued")
+    processing_eta_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(160), nullable=True)

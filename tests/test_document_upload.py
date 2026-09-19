@@ -1,3 +1,5 @@
+import asyncio
+import hashlib
 from pathlib import Path
 from uuid import UUID
 
@@ -25,6 +27,26 @@ async def _register(api_client: httpx.AsyncClient) -> tuple[str, UUID]:
     assert response.status_code == 201
     body = response.json()
     return body["access_token"], UUID(body["active_tenant_id"])
+
+
+class BlockingEmbeddingProvider:
+    model = "blocking-test"
+    dimensions = 1536
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def embed_query(self, text: str) -> list[float]:
+        return [float(bool(text))] * self.dimensions
+
+    async def embed_document(self, text: str) -> list[float]:
+        return [float(bool(text))] * self.dimensions
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        self.started.set()
+        await self.release.wait()
+        return [[0.0] * self.dimensions for _ in texts]
 
 
 async def test_upload_processes_text_into_reviewable_chunks(
@@ -77,6 +99,9 @@ async def test_upload_processes_text_into_reviewable_chunks(
     uploaded = response.json()
     assert uploaded["status"] == "draft"
     assert uploaded["processing_status"] == "uploaded"
+    assert uploaded["processing_progress"] == 0
+    assert uploaded["processing_stage"] == "queued"
+    assert uploaded["processing_eta_seconds"] is not None
     assert uploaded["original_filename"] == "house-manual.md"
     assert "storage_key" not in uploaded
 
@@ -87,6 +112,9 @@ async def test_upload_processes_text_into_reviewable_chunks(
     processed = status_response.json()
     assert processed["status"] == "pending_review"
     assert processed["processing_status"] == "needs_review"
+    assert processed["processing_progress"] == 100
+    assert processed["processing_stage"] == "complete"
+    assert processed["processing_eta_seconds"] == 0
     assert processed["chunk_count"] > 1
     assert processed["extracted_characters"] == len(manual)
     assert processed["embedding_status"] == "pending"
@@ -116,6 +144,69 @@ async def test_upload_processes_text_into_reviewable_chunks(
         )
         assert len(chunks) == processed["chunk_count"]
         assert all(chunk.embedding is None for chunk in chunks)
+
+
+async def test_processing_progress_is_available_from_the_document_api(
+    api_client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        app_env="test",
+        document_storage_root=tmp_path / "uploads",
+        document_chunk_characters=400,
+        document_chunk_overlap=50,
+    )
+    token, tenant_id = await _register(api_client)
+    headers = {"Authorization": f"Bearer {token}"}
+    content = b"Check-in is at 15:00. Quiet hours begin at 22:00."
+
+    async with db_session_factory() as session:
+        document = KnowledgeDocument(
+            tenant_id=tenant_id,
+            title="Progress manual",
+            document_type="house_manual",
+            status=KnowledgeStatus.DRAFT,
+            processing_status=DocumentProcessingStatus.UPLOADED,
+            original_filename="progress.txt",
+            media_type="text/plain",
+            size_bytes=len(content),
+            file_sha256=hashlib.sha256(content).hexdigest(),
+        )
+        session.add(document)
+        await session.flush()
+        document.storage_key = f"{tenant_id}/{document.id}/progress.txt"
+        stored_path = settings.document_storage_root.joinpath(*document.storage_key.split("/"))
+        stored_path.parent.mkdir(parents=True)
+        stored_path.write_bytes(content)
+        await session.commit()
+        document_id = document.id
+
+    provider = BlockingEmbeddingProvider()
+    queue = InProcessDocumentQueue(
+        db_session_factory,
+        settings=settings,
+        embedding_provider=provider,
+    )
+    processing_task = asyncio.create_task(queue.process(document_id))
+    try:
+        await asyncio.wait_for(provider.started.wait(), timeout=2)
+        response = await api_client.get(
+            f"/api/v1/knowledge/documents/{document_id}", headers=headers
+        )
+        body = response.json()
+        assert body["processing_status"] == "processing"
+        assert body["processing_stage"] == "embedding"
+        assert body["processing_progress"] == 55
+        assert 0 <= body["processing_eta_seconds"] <= 7
+    finally:
+        provider.release.set()
+        await processing_task
+
+    completed = await api_client.get(
+        f"/api/v1/knowledge/documents/{document_id}", headers=headers
+    )
+    assert completed.json()["processing_progress"] == 100
 
 
 async def test_upload_rejects_unsupported_and_mismatched_files(
@@ -185,6 +276,8 @@ async def test_processing_failure_is_visible_but_not_published(
     body = document_response.json()
     assert body["status"] == KnowledgeStatus.DRAFT.value
     assert body["processing_status"] == DocumentProcessingStatus.FAILED.value
+    assert body["processing_stage"] == "failed"
+    assert body["processing_eta_seconds"] is None
     assert body["processing_error"] == "No readable text was found in the document"
     assert body["chunk_count"] == 0
 

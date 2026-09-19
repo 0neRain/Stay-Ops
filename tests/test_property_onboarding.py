@@ -1,7 +1,9 @@
+import asyncio
 from pathlib import Path
 from uuid import UUID
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.routes.knowledge import get_document_job_queue
@@ -27,10 +29,27 @@ async def _register(api_client: httpx.AsyncClient) -> tuple[str, UUID]:
     return body["access_token"], UUID(body["active_tenant_id"])
 
 
+class BlockingExtractionModel:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    def with_structured_output(self, schema: object) -> "BlockingExtractionModel":
+        del schema
+        return self
+
+    async def ainvoke(self, messages: object) -> object:
+        del messages
+        self.started.set()
+        await self.release.wait()
+        raise RuntimeError("Use the local extraction fallback")
+
+
 async def test_documents_prefill_review_and_activate_home(
     api_client: httpx.AsyncClient,
     db_session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = Settings(
         app_env="test",
@@ -77,13 +96,37 @@ Amenities: Air conditioning; washer; travel cot.
     )
     assert upload.status_code == 202
 
-    extraction = await api_client.post(
-        f"/api/v1/properties/{draft['id']}/onboarding/extract",
-        headers=headers,
+    extraction_model = BlockingExtractionModel()
+    monkeypatch.setattr(
+        "app.api.routes.properties.configured_answering_model",
+        lambda settings, max_tokens: extraction_model,
     )
+    extraction_task = asyncio.create_task(
+        api_client.post(
+            f"/api/v1/properties/{draft['id']}/onboarding/extract",
+            headers=headers,
+        )
+    )
+    try:
+        await asyncio.wait_for(extraction_model.started.wait(), timeout=2)
+        progress_response = await api_client.get(
+            f"/api/v1/properties/{draft['id']}/onboarding",
+            headers=headers,
+        )
+        progress = progress_response.json()
+        assert progress["status"] == "extracting"
+        assert progress["extraction_progress"] == 10
+        assert progress["extraction_stage"] == "extracting_profile"
+        assert 0 <= progress["extraction_eta_seconds"] <= 20
+    finally:
+        extraction_model.release.set()
+    extraction = await extraction_task
     assert extraction.status_code == 200
     review = extraction.json()
     assert review["status"] == "review"
+    assert review["extraction_progress"] == 100
+    assert review["extraction_stage"] == "complete"
+    assert review["extraction_eta_seconds"] == 0
     assert review["extraction_method"] == "rules"
     assert review["profile"]["name"] == "Casa Verde"
     assert review["profile"]["check_in_time"] == "15:00"

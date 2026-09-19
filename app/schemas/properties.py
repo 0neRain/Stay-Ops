@@ -91,4 +91,7 @@ class HomeOnboardingResponse(BaseModel):
     evidence: dict[str, ExtractionEvidence] = Field(default_factory=dict)
     documents: list[OnboardingDocumentSummary] = Field(default_factory=list)
     extraction_method: Literal["openrouter", "rules"] | None = None
+    extraction_progress: int = 0
+    extraction_stage: str | None = None
+    extraction_eta_seconds: int | None = None
     created_at: datetime

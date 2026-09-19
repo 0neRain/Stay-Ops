@@ -138,6 +138,10 @@ class PropertyOnboardingService:
             property_record,
             status=PropertyOnboardingStatus.EXTRACTING.value,
             extraction_started_at=datetime.now(timezone.utc).isoformat(),
+            extraction_stage_started_at=datetime.now(timezone.utc).isoformat(),
+            extraction_progress=10,
+            extraction_stage="extracting_profile",
+            extraction_eta_seconds=20,
         )
         self._session.add(
             AuditEvent(
@@ -182,6 +186,19 @@ class PropertyOnboardingService:
 
         self._update_onboarding(
             property_record,
+            extraction_stage_started_at=datetime.now(timezone.utc).isoformat(),
+            extraction_progress=90,
+            extraction_stage="saving_profile",
+            extraction_eta_seconds=2,
+        )
+        await self._session.commit()
+        property_record = await self._find_property(
+            tenant_id=tenant_id,
+            property_id=property_id,
+            for_update=True,
+        )
+        self._update_onboarding(
+            property_record,
             status=PropertyOnboardingStatus.REVIEW.value,
             prefill=extracted.profile.model_dump(mode="json"),
             evidence={
@@ -189,6 +206,9 @@ class PropertyOnboardingService:
             },
             extraction_method=extracted.method,
             extracted_at=datetime.now(timezone.utc).isoformat(),
+            extraction_progress=100,
+            extraction_stage="complete",
+            extraction_eta_seconds=0,
         )
         self._session.add(
             AuditEvent(
@@ -381,6 +401,27 @@ class PropertyOnboardingService:
 
         documents = await self._documents_for_property(property_record)
         extraction_method = onboarding.get("extraction_method")
+        extraction_progress = onboarding.get("extraction_progress", 0)
+        if not isinstance(extraction_progress, int):
+            extraction_progress = 0
+        extraction_progress = max(0, min(100, extraction_progress))
+        extraction_stage = onboarding.get("extraction_stage")
+        if not isinstance(extraction_stage, str):
+            extraction_stage = None
+        extraction_eta_seconds = onboarding.get("extraction_eta_seconds")
+        if not isinstance(extraction_eta_seconds, int):
+            extraction_eta_seconds = None
+        if extraction_eta_seconds is not None and status == PropertyOnboardingStatus.EXTRACTING:
+            stage_started_at = onboarding.get("extraction_stage_started_at")
+            if isinstance(stage_started_at, str):
+                try:
+                    started_at = datetime.fromisoformat(stage_started_at)
+                    if started_at.tzinfo is None:
+                        started_at = started_at.replace(tzinfo=timezone.utc)
+                    elapsed = int((datetime.now(timezone.utc) - started_at).total_seconds())
+                    extraction_eta_seconds = max(0, extraction_eta_seconds - elapsed)
+                except ValueError:
+                    pass
         return HomeOnboardingResponse(
             id=property_record.id,
             status=status,
@@ -399,6 +440,9 @@ class PropertyOnboardingService:
             extraction_method=(
                 extraction_method if extraction_method in {"openrouter", "rules"} else None
             ),
+            extraction_progress=extraction_progress,
+            extraction_stage=extraction_stage,
+            extraction_eta_seconds=extraction_eta_seconds,
             created_at=property_record.created_at,
         )
 
@@ -425,7 +469,12 @@ class PropertyOnboardingService:
             for_update=True,
         )
         if onboarding_status(property_record) == PropertyOnboardingStatus.EXTRACTING:
-            self._update_onboarding(property_record, status=previous_status.value)
+            self._update_onboarding(
+                property_record,
+                status=previous_status.value,
+                extraction_stage="failed",
+                extraction_eta_seconds=None,
+            )
             self._session.add(
                 AuditEvent(
                     tenant_id=tenant_id,

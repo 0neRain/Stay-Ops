@@ -3,7 +3,9 @@ from langchain_openrouter import ChatOpenRouter
 from app.core.config import Settings
 
 
-def configured_answering_model(settings: Settings) -> ChatOpenRouter | None:
+def configured_answering_model(
+    settings: Settings, *, max_tokens: int | None = None
+) -> ChatOpenRouter | None:
     """Create the configured OpenRouter chat client without making a network request."""
     if not settings.answering_api_key:
         return None
@@ -14,7 +16,7 @@ def configured_answering_model(settings: Settings) -> ChatOpenRouter | None:
         app_title=settings.openrouter_app_title,
         model_name=settings.openrouter_chat_model,
         temperature=settings.openrouter_chat_temperature,
-        max_tokens=settings.openrouter_chat_max_tokens,
+        max_tokens=max_tokens or settings.openrouter_chat_max_tokens,
         timeout=int(settings.openrouter_timeout_seconds),
         max_retries=2,
     )

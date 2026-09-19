@@ -8,5 +8,6 @@ __pycache__/
 .coverage
 .cache/
 htmlcov/
+data/uploads/
 .idea/
 .vscode/

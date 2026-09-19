@@ -48,6 +48,12 @@ authorization, human handoff, evaluation, and controlled knowledge improvement.
 
 ### Controlled improvement
 
+- Accept property-specific or organization-wide TXT, Markdown, HTML, PDF, and DOCX
+  sources through an authenticated upload endpoint.
+- Validate file type, signature, encoding, compressed size, and extracted-text size;
+  then extract, normalize, and chunk text for retrieval.
+- Store raw files behind random internal keys and expose processing status without
+  exposing storage paths.
 - Detect missing knowledge and frequently corrected answers.
 - Redact personal data and generate a draft knowledge candidate.
 - Require an authorized reviewer before publication.
@@ -80,6 +86,9 @@ authorization, human handoff, evaluation, and controlled knowledge improvement.
   actions require deterministic authorization and human approval.
 - Guest messages and uploaded documents are untrusted data and cannot override
   system policy or tool authorization.
+- Document uploads use an allow-list, size limits, content checks, path-safe random
+  storage keys, integrity hashes, and tenant/property authorization. Extracted
+  content remains unavailable to the agent until an authorized review publishes it.
 - Webhooks are authenticated where the provider supports it, deduplicated, queued,
   and processed idempotently.
 - Logs redact secrets and unnecessary personal data. Tool calls, model decisions,
@@ -131,7 +140,8 @@ foundation; `Planned` routes define the intended public contract.
 
 | Method | Route | Status | Purpose |
 |---|---|---:|---|
-| POST | `/api/v1/knowledge/documents` | Planned | Upload a knowledge source |
+| POST | `/api/v1/knowledge/documents` | Implemented | Upload and enqueue a knowledge source for processing |
+| GET | `/api/v1/knowledge/documents/{document_id}` | Implemented | Read tenant-scoped processing and review status |
 | GET | `/api/v1/knowledge/candidates` | Planned | List suggested improvements |
 | POST | `/api/v1/knowledge/candidates/{candidate_id}/approve` | Planned | Publish a reviewed candidate |
 | POST | `/api/v1/knowledge/candidates/{candidate_id}/reject` | Planned | Reject a candidate with a reason |

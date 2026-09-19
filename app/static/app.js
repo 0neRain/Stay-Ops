@@ -21,6 +21,10 @@ const icon = (name, className = "icon") => {
     left: '<path d="m15 18-6-6 6-6"/>',
     right: '<path d="m9 18 6-6-6-6"/>',
     close: '<path d="m18 6-12 12M6 6l12 12"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
   };
   return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || ""}</svg>`;
 };
@@ -36,6 +40,7 @@ const state = {
   weekOffset: 0,
   notificationOpen: false,
   readNotifications: new Set(),
+  homeOnboarding: { draft: null, selectedFiles: [], uploading: false },
 };
 
 function escapeHtml(value) {
@@ -45,6 +50,24 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem("stayops_token");
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(path, { ...options, headers, credentials: "include" });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof result.detail === "string" ? result.detail : "We couldn’t complete that request.";
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return result;
 }
 
 const homes = [
@@ -321,7 +344,7 @@ function dashboardPage() {
     <div class="dashboard-page"><div class="dashboard-shell">
       <aside class="side-rail" aria-label="Dashboard navigation">${brand(false).replace('<span class="brand-name">StayOps</span>', "")}<nav class="rail-nav"><button class="rail-button active" aria-label="Guest inbox" title="Guest inbox">${icon("message")}</button><button class="rail-button" aria-label="Calendar" title="Calendar" data-scroll-calendar>${icon("calendar")}</button><button class="rail-button" aria-label="Analytics" title="Analytics">${icon("chart")}</button><button class="rail-button" aria-label="Settings" title="Settings">${icon("settings")}</button></nav><button class="rail-profile" id="logout-button" aria-label="Sign out" title="Sign out">${escapeHtml(initials)}</button></aside>
       <main class="dashboard-main" id="dashboard-content">
-        <header class="dash-header"><div class="dash-header-title"><h1>Guest operations</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><span class="date-chip">${icon("calendar", "icon icon-sm")} Monday, Sep 14</span><div class="notification-wrap"><button class="icon-button" id="notification-button" type="button" aria-label="Open handoff notifications" aria-expanded="${state.notificationOpen}">${icon("bell")}${unread ? `<span class="notification-count">${unread}</span>` : ""}</button>${notificationPanel()}</div></div></header>
+        <header class="dash-header"><div class="dash-header-title"><h1>Guest operations</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><span class="date-chip">${icon("calendar", "icon icon-sm")} Monday, Sep 14</span><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a><div class="notification-wrap"><button class="icon-button" id="notification-button" type="button" aria-label="Open handoff notifications" aria-expanded="${state.notificationOpen}">${icon("bell")}${unread ? `<span class="notification-count">${unread}</span>` : ""}</button>${notificationPanel()}</div></div></header>
         <div class="dashboard-content">
           <aside class="inbox-pane"><div class="pane-title"><h2>Guest inbox</h2><span class="filter-label">All homes</span></div><div id="home-groups">${homeGroups()}</div></aside>
           <section class="chat-pane" id="chat-pane" aria-label="Guest conversation">${chatContent()}</section>
@@ -331,13 +354,268 @@ function dashboardPage() {
     </div></div>`;
 }
 
+const homeProfileFields = [
+  { key: "name", label: "Home name", required: true, placeholder: "Casa Verde" },
+  { key: "timezone", label: "Timezone", required: true, placeholder: "Europe/Rome" },
+  { key: "address", label: "Full address", wide: true, placeholder: "Via Verde 12, Florence, Italy" },
+  { key: "property_type", label: "Property type", placeholder: "Apartment, villa, cabin…" },
+  { key: "guest_capacity", label: "Maximum guests", placeholder: "4" },
+  { key: "bedrooms", label: "Bedrooms", placeholder: "2" },
+  { key: "bathrooms", label: "Bathrooms", placeholder: "1.5" },
+  { key: "check_in_time", label: "Check-in time", placeholder: "15:00" },
+  { key: "check_out_time", label: "Check-out time", placeholder: "10:00" },
+  { key: "wifi_network", label: "Wi-Fi network name", placeholder: "Guest network name" },
+  { key: "parking_instructions", label: "Parking instructions", wide: true, multiline: true },
+  { key: "access_instructions", label: "Arrival & access instructions", wide: true, multiline: true },
+  { key: "house_rules", label: "House rules", wide: true, multiline: true },
+  { key: "amenities", label: "Amenities", wide: true, multiline: true },
+  { key: "emergency_information", label: "Emergency information", wide: true, multiline: true },
+  { key: "local_recommendations", label: "Local recommendations", wide: true, multiline: true },
+];
+
+function newHomePage() {
+  const authenticated = Boolean(localStorage.getItem("stayops_token"));
+  return `
+    <a class="skip-link" href="#home-flow-content">Skip to home setup</a>
+    <main class="onboarding-page">
+      <header class="onboarding-header"><a href="/dashboard" data-link>${brand(false)}</a><a class="onboarding-exit" href="/dashboard" data-link>${icon("close", "icon icon-sm")} Save and exit</a></header>
+      <div class="onboarding-frame">
+        <div class="onboarding-intro"><span class="eyebrow">Add a home</span><h1>Build the home profile from what you already have.</h1><p>Upload your existing guidebooks, rules, or check-in notes. StayOps will prepare the form; you stay in control of every value.</p></div>
+        <ol class="stepper" aria-label="Home setup progress"><li class="active" data-step-indicator="documents"><span>1</span><div><strong>Documents</strong><small>Upload source material</small></div></li><li data-step-indicator="review"><span>2</span><div><strong>Review details</strong><small>Confirm before saving</small></div></li></ol>
+        <section class="onboarding-card" id="home-flow-content">
+          ${authenticated ? `<div class="flow-loading"><span class="loading-ring"></span><strong>Preparing your home…</strong></div>` : `<div class="auth-gate"><span class="feature-icon">${icon("shield")}</span><h2>Sign in to add a home</h2><p>This flow stores private property documents in your workspace.</p><a class="btn btn-primary" href="/auth" data-link>Sign in ${icon("arrow", "icon icon-sm")}</a></div>`}
+        </section>
+        <p class="security-note">${icon("shield", "icon icon-sm")} Passwords and access codes are excluded from profile extraction. Add operational secrets through the dedicated secure credentials flow.</p>
+      </div>
+    </main>`;
+}
+
+function setHomeStep(step) {
+  document.querySelectorAll("[data-step-indicator]").forEach((item) => {
+    const itemStep = item.dataset.stepIndicator;
+    item.classList.toggle("active", itemStep === step);
+    item.classList.toggle("complete", step === "review" && itemStep === "documents");
+  });
+}
+
+function documentStatusLabel(status) {
+  const labels = { uploaded: "Queued", processing: "Reading", needs_review: "Ready", failed: "Needs attention" };
+  return labels[status] || status;
+}
+
+function uploadStepMarkup(draft) {
+  const documents = draft.documents || [];
+  return `
+    <div class="flow-card-head"><div><span class="flow-kicker">Step 1 of 2</span><h2>Start with your documents</h2><p>PDF, DOCX, TXT, Markdown, or HTML · up to 10 MB each</p></div><span class="privacy-chip">${icon("shield", "icon icon-sm")} Private workspace</span></div>
+    <form id="home-upload-form" class="upload-form">
+      <label class="upload-dropzone" id="upload-dropzone" for="home-documents">
+        <input id="home-documents" type="file" multiple accept=".pdf,.docx,.txt,.md,.html,.htm" hidden>
+        <span class="upload-icon">${icon("upload")}</span><strong>Drop documents here or choose files</strong><span>House manual, check-in guide, house rules, appliance notes…</span>
+      </label>
+      <div class="selected-files" id="selected-files"></div>
+      ${documents.length ? `<div class="existing-documents"><h3>Documents in this draft</h3>${documents.map((document) => `<div class="document-row"><span class="document-file-icon">${icon("file", "icon icon-sm")}</span><span><strong>${escapeHtml(document.filename || "Document")}</strong><small>${document.processing_error ? escapeHtml(document.processing_error) : documentStatusLabel(document.processing_status)}</small></span><i class="document-state ${document.processing_status}"></i></div>`).join("")}</div>` : ""}
+      <div class="flow-error" id="home-flow-error" role="alert"></div>
+      <div class="flow-actions"><a class="btn btn-ghost" href="/dashboard" data-link>Cancel</a><button class="btn btn-primary" id="process-documents" type="submit">Extract home details ${icon("arrow", "icon icon-sm")}</button></div>
+    </form>`;
+}
+
+function renderSelectedFiles() {
+  const container = document.querySelector("#selected-files");
+  if (!container) return;
+  container.innerHTML = state.homeOnboarding.selectedFiles.map((file, index) => `
+    <div class="document-row selected"><span class="document-file-icon">${icon("file", "icon icon-sm")}</span><span><strong>${escapeHtml(file.name)}</strong><small>${Math.max(1, Math.round(file.size / 1024))} KB</small></span><button type="button" data-remove-file="${index}" aria-label="Remove ${escapeHtml(file.name)}">${icon("close", "icon icon-sm")}</button></div>`).join("");
+  container.querySelectorAll("[data-remove-file]").forEach((button) => button.addEventListener("click", () => {
+    state.homeOnboarding.selectedFiles.splice(Number(button.dataset.removeFile), 1);
+    renderSelectedFiles();
+  }));
+}
+
+function bindUploadStep() {
+  const input = document.querySelector("#home-documents");
+  const dropzone = document.querySelector("#upload-dropzone");
+  input?.addEventListener("change", () => {
+    state.homeOnboarding.selectedFiles = Array.from(input.files || []);
+    renderSelectedFiles();
+  });
+  ["dragenter", "dragover"].forEach((name) => dropzone?.addEventListener(name, (event) => {
+    event.preventDefault();
+    dropzone.classList.add("dragging");
+  }));
+  ["dragleave", "drop"].forEach((name) => dropzone?.addEventListener(name, (event) => {
+    event.preventDefault();
+    dropzone.classList.remove("dragging");
+  }));
+  dropzone?.addEventListener("drop", (event) => {
+    state.homeOnboarding.selectedFiles = Array.from(event.dataTransfer?.files || []);
+    renderSelectedFiles();
+  });
+  document.querySelector("#home-upload-form")?.addEventListener("submit", handleHomeDocuments);
+  renderSelectedFiles();
+}
+
+function renderUploadStep(draft) {
+  state.homeOnboarding.draft = draft;
+  setHomeStep("documents");
+  const content = document.querySelector("#home-flow-content");
+  if (!content) return;
+  content.innerHTML = uploadStepMarkup(draft);
+  bindUploadStep();
+}
+
+function reviewFieldMarkup(field, draft) {
+  const value = draft.profile?.[field.key] || "";
+  const evidence = draft.evidence?.[field.key];
+  const control = field.multiline
+    ? `<textarea id="home-${field.key}" name="${field.key}" rows="3" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>${escapeHtml(value)}</textarea>`
+    : `<input id="home-${field.key}" name="${field.key}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>`;
+  return `<div class="review-field ${field.wide ? "wide" : ""}"><div class="review-label"><label for="home-${field.key}">${field.label}${field.required ? " *" : ""}</label>${evidence ? `<span class="extracted-chip">${icon("spark", "icon icon-xs")} Extracted · ${Math.round(evidence.confidence * 100)}%</span>` : ""}</div>${control}${evidence ? `<small class="source-note">From ${escapeHtml(evidence.source_filename)}: “${escapeHtml(evidence.excerpt)}”</small>` : `<small class="source-note empty">Not found in the uploaded documents</small>`}</div>`;
+}
+
+function renderReviewStep(draft) {
+  state.homeOnboarding.draft = draft;
+  setHomeStep("review");
+  const content = document.querySelector("#home-flow-content");
+  if (!content) return;
+  const extractedCount = Object.keys(draft.evidence || {}).length;
+  content.innerHTML = `
+    <div class="flow-card-head review-head"><div><span class="flow-kicker">Step 2 of 2</span><h2>Review the home details</h2><p>We pre-filled ${extractedCount} field${extractedCount === 1 ? "" : "s"}. Check every value before activating the home.</p></div><span class="method-chip">${icon("spark", "icon icon-sm")} ${draft.extraction_method === "openrouter" ? "OpenRouter extraction" : "Local extraction"}</span></div>
+    <form id="home-review-form" class="review-form">
+      <section><h3>Basics</h3><div class="review-grid">${homeProfileFields.slice(0, 7).map((field) => reviewFieldMarkup(field, draft)).join("")}</div></section>
+      <section><h3>Guest operations</h3><div class="review-grid">${homeProfileFields.slice(7).map((field) => reviewFieldMarkup(field, draft)).join("")}</div></section>
+      <div class="flow-error" id="home-flow-error" role="alert"></div>
+      <div class="flow-actions"><button class="btn btn-ghost" id="back-to-documents" type="button">${icon("back", "icon icon-sm")} Add more documents</button><button class="btn btn-primary" id="save-home" type="submit">Save and activate home ${icon("check", "icon icon-sm")}</button></div>
+    </form>`;
+  document.querySelector("#back-to-documents")?.addEventListener("click", () => renderUploadStep(draft));
+  document.querySelector("#home-review-form")?.addEventListener("submit", handleHomeReview);
+}
+
+async function waitForHomeExtraction(propertyId) {
+  const content = document.querySelector("#home-flow-content");
+  if (content) content.innerHTML = `<div class="flow-loading"><span class="loading-ring"></span><strong>Building your home profile…</strong><span>You can keep this page open while we finish reading the documents.</span></div>`;
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const draft = await apiRequest(`/api/v1/properties/${propertyId}/onboarding`);
+    if (draft.status !== "extracting") return draft;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Home profile extraction is taking longer than expected. You can safely return later.");
+}
+
+async function initializeHomeOnboarding() {
+  if (!localStorage.getItem("stayops_token")) return;
+  try {
+    const storedId = localStorage.getItem("stayops_home_draft");
+    let draft;
+    if (storedId) {
+      try { draft = await apiRequest(`/api/v1/properties/${storedId}/onboarding`); }
+      catch (error) { if (error.status !== 404 && error.status !== 409) throw error; }
+    }
+    if (!draft || draft.status === "completed") {
+      localStorage.removeItem("stayops_home_draft");
+      draft = await apiRequest("/api/v1/properties/onboarding", { method: "POST" });
+      localStorage.setItem("stayops_home_draft", draft.id);
+    }
+    if (draft.status === "extracting") draft = await waitForHomeExtraction(draft.id);
+    if (draft.status === "review") renderReviewStep(draft);
+    else renderUploadStep(draft);
+  } catch (error) {
+    const content = document.querySelector("#home-flow-content");
+    if (content) content.innerHTML = `<div class="auth-gate"><span class="feature-icon">${icon("alert")}</span><h2>We couldn’t prepare the home</h2><p>${escapeHtml(error.message)}</p><a class="btn btn-outline" href="/dashboard" data-link>Back to dashboard</a></div>`;
+  }
+}
+
+function inferDocumentType(filename) {
+  const value = filename.toLowerCase();
+  if (value.includes("check") || value.includes("arrival")) return "check_in_guide";
+  if (value.includes("rule")) return "house_rules";
+  if (value.includes("appliance")) return "appliance_guide";
+  if (value.includes("local") || value.includes("recommend")) return "local_guide";
+  return "house_manual";
+}
+
+async function waitForDocument(documentId, onUpdate) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const document = await apiRequest(`/api/v1/knowledge/documents/${documentId}`);
+    onUpdate(document);
+    if (["needs_review", "failed"].includes(document.processing_status)) return document;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  throw new Error("Document processing took too long. You can safely return and try again.");
+}
+
+async function handleHomeDocuments(event) {
+  event.preventDefault();
+  if (state.homeOnboarding.uploading) return;
+  const draft = state.homeOnboarding.draft;
+  const existingReady = (draft.documents || []).some((item) => item.processing_status === "needs_review");
+  const errorBox = document.querySelector("#home-flow-error");
+  const button = document.querySelector("#process-documents");
+  if (!state.homeOnboarding.selectedFiles.length && !existingReady) {
+    errorBox.textContent = "Choose at least one document to continue.";
+    errorBox.classList.add("show");
+    return;
+  }
+  state.homeOnboarding.uploading = true;
+  button.disabled = true;
+  errorBox.classList.remove("show");
+  try {
+    for (const file of state.homeOnboarding.selectedFiles) {
+      button.textContent = `Uploading ${file.name}…`;
+      const body = new FormData();
+      body.append("file", file);
+      body.append("title", file.name.replace(/\.[^.]+$/, ""));
+      body.append("document_type", inferDocumentType(file.name));
+      body.append("property_id", draft.id);
+      const uploaded = await apiRequest("/api/v1/knowledge/documents", { method: "POST", body });
+      button.textContent = `Reading ${file.name}…`;
+      const processed = await waitForDocument(uploaded.id, () => {});
+      if (processed.processing_status === "failed") throw new Error(`${file.name}: ${processed.processing_error}`);
+    }
+    button.textContent = "Building your form…";
+    const extracted = await apiRequest(`/api/v1/properties/${draft.id}/onboarding/extract`, { method: "POST" });
+    state.homeOnboarding.selectedFiles = [];
+    renderReviewStep(extracted);
+  } catch (error) {
+    errorBox.textContent = error.message || "The documents could not be processed.";
+    errorBox.classList.add("show");
+    button.disabled = false;
+    button.innerHTML = `Try again ${icon("arrow", "icon icon-sm")}`;
+  } finally {
+    state.homeOnboarding.uploading = false;
+  }
+}
+
+async function handleHomeReview(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const errorBox = form.querySelector("#home-flow-error");
+  const button = form.querySelector("#save-home");
+  const profile = Object.fromEntries(new FormData(form));
+  button.disabled = true;
+  button.textContent = "Saving home…";
+  errorBox.classList.remove("show");
+  try {
+    const draft = state.homeOnboarding.draft;
+    const completed = await apiRequest(`/api/v1/properties/${draft.id}/onboarding`, { method: "PATCH", body: JSON.stringify(profile) });
+    localStorage.removeItem("stayops_home_draft");
+    state.homeOnboarding = { draft: null, selectedFiles: [], uploading: false };
+    navigate("/dashboard");
+    toast(`${completed.profile.name} is ready.`);
+  } catch (error) {
+    errorBox.textContent = error.message || "The home could not be saved.";
+    errorBox.classList.add("show");
+    button.disabled = false;
+    button.innerHTML = `Save and activate home ${icon("check", "icon icon-sm")}`;
+  }
+}
+
 function renderRoute() {
   const path = window.location.pathname.replace(/\/$/, "") || "/";
   if (path === "/auth") app.innerHTML = authPage();
   else if (path === "/dashboard") app.innerHTML = dashboardPage();
+  else if (path === "/homes/new") app.innerHTML = newHomePage();
   else app.innerHTML = landingPage();
   bindEvents(path);
-  document.title = path === "/dashboard" ? "Guest Operations — StayOps" : path === "/auth" ? "Sign in — StayOps" : "StayOps — Guest operations, in one place";
+  document.title = path === "/dashboard" ? "Guest Operations — StayOps" : path === "/auth" ? "Sign in — StayOps" : path === "/homes/new" ? "Add a home — StayOps" : "StayOps — Guest operations, in one place";
 }
 
 function bindEvents(path) {
@@ -381,6 +659,8 @@ function bindEvents(path) {
     document.querySelector("#logout-button")?.addEventListener("click", handleLogout);
     setTimeout(() => { const messages = document.querySelector("#messages"); if (messages) messages.scrollTop = messages.scrollHeight; }, 0);
   }
+
+  if (path === "/homes/new") initializeHomeOnboarding();
 }
 
 function selectThread(threadId) {

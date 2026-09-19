@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -47,6 +48,12 @@ class Settings(BaseSettings):
     openrouter_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     semantic_risk_threshold: float = Field(default=0.80, ge=0, le=1)
 
+    document_storage_root: Path = Path("data/uploads")
+    document_max_upload_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    document_max_extracted_characters: int = Field(default=500_000, ge=10_000, le=2_000_000)
+    document_chunk_characters: int = Field(default=1_600, ge=400, le=4_000)
+    document_chunk_overlap: int = Field(default=200, ge=0, le=800)
+
     @property
     def answering_api_key(self) -> str | None:
         return self.openrouter_chat_api_key or self.openrouter_api_key
@@ -56,7 +63,11 @@ class Settings(BaseSettings):
         return self.openrouter_embedding_api_key or self.openrouter_api_key
 
     @model_validator(mode="after")
-    def reject_unsafe_production_settings(self) -> "Settings":
+    def validate_cross_field_settings(self) -> "Settings":
+        if self.document_chunk_overlap >= self.document_chunk_characters:
+            raise ValueError(
+                "DOCUMENT_CHUNK_OVERLAP must be smaller than DOCUMENT_CHUNK_CHARACTERS"
+            )
         if self.app_env == "production":
             if self.jwt_secret_key == DEVELOPMENT_JWT_SECRET:
                 raise ValueError("JWT_SECRET_KEY must be replaced in production")

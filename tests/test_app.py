@@ -42,3 +42,5 @@ async def test_auth_routes_are_in_openapi_schema() -> None:
     assert "/api/v1/escalations" in paths
     assert "/api/v1/escalations/{escalation_id}/claim" in paths
     assert "/api/v1/escalations/{escalation_id}/resolve" in paths
+    assert "/api/v1/knowledge/documents" in paths
+    assert "/api/v1/knowledge/documents/{document_id}" in paths

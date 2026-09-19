@@ -10,7 +10,8 @@ See [PROJECT.md](PROJECT.md) for the product and API specification.
 
 1. Copy `.env.example` to `.env` and replace `JWT_SECRET_KEY`.
 2. Start PostgreSQL: `docker compose up -d db`.
-3. Create a virtual environment and install the project.
+3. Create a virtual environment and install the project with its document and
+   development dependencies: `pip install -e ".[documents,dev]"`.
 4. Apply migrations with `alembic upgrade head`.
 5. Optionally create the isolated mock database and apply the same migrations:
 
@@ -41,6 +42,20 @@ The support pipeline uses published, tenant/property-scoped knowledge only. Add 
 `openai/text-embedding-3-small` pgvector retrieval. Optional
 `OPENROUTER_CHAT_API_KEY` and `OPENROUTER_EMBEDDING_API_KEY` values override the shared key.
 Without a key, the deterministic lexical fallback keeps local development and tests offline.
+
+## Document ingestion
+
+Owners and managers can upload UTF-8 TXT, Markdown, HTML, PDF, or DOCX files to
+`POST /api/v1/knowledge/documents`. A document can belong to one property or be
+organization-wide. The pipeline validates and stores the file, extracts and normalizes
+its text, creates overlapping retrieval chunks, and requests OpenRouter embeddings when
+credentials are configured. `GET /api/v1/knowledge/documents/{document_id}` exposes the
+processing result.
+
+Processed uploads enter `pending_review`; they are never published to the guest agent
+automatically. Without an embedding key, content is retained with an explicit `pending`
+embedding state. The current in-process background runner is suitable for local development;
+a production deployment should move jobs to a durable queue and add malware scanning.
 
 ## Semantic risk index
 

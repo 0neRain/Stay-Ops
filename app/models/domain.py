@@ -28,6 +28,7 @@ from app.models.enums import (
     CandidateStatus,
     ConversationStatus,
     DeliveryStatus,
+    DocumentProcessingStatus,
     EscalationStatus,
     EscalationUrgency,
     FeedbackRating,
@@ -227,7 +228,16 @@ class Escalation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class KnowledgeDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "knowledge_documents"
-    __table_args__ = (Index("ix_knowledge_documents_scope", "tenant_id", "property_id", "status"),)
+    __table_args__ = (
+        UniqueConstraint("storage_key", name="uq_knowledge_documents_storage_key"),
+        Index("ix_knowledge_documents_scope", "tenant_id", "property_id", "status"),
+        Index(
+            "ix_knowledge_documents_processing",
+            "tenant_id",
+            "processing_status",
+            "created_at",
+        ),
+    )
 
     tenant_id: Mapped[UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
@@ -242,6 +252,25 @@ class KnowledgeDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=KnowledgeStatus.DRAFT,
     )
+    processing_status: Mapped[DocumentProcessingStatus] = mapped_column(
+        SAEnum(
+            DocumentProcessingStatus,
+            name="document_processing_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=DocumentProcessingStatus.UPLOADED,
+    )
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    uploaded_by_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
 
 class KnowledgeVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -286,7 +315,7 @@ class KnowledgeChunk(UUIDPrimaryKeyMixin, Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSON, nullable=False, default=dict
     )

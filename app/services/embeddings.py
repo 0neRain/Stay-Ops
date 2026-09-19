@@ -19,6 +19,8 @@ class EmbeddingProvider(Protocol):
 
     async def embed_document(self, text: str) -> list[float]: ...
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]: ...
+
 
 class EmbeddingProviderError(Exception):
     pass
@@ -109,6 +111,9 @@ class CachedEmbeddingProvider:
 
     async def embed_document(self, text: str) -> list[float]:
         return await self.delegate.embed_document(text)
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await self.delegate.embed_documents(texts)
 
 
 def configured_embedding_provider(settings: Settings) -> EmbeddingProvider | None:

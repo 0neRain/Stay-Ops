@@ -72,6 +72,20 @@ class KnowledgeStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class DocumentProcessingStatus(str, Enum):
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    NEEDS_REVIEW = "needs_review"
+    FAILED = "failed"
+
+
+class PropertyOnboardingStatus(str, Enum):
+    DOCUMENTS = "documents"
+    EXTRACTING = "extracting"
+    REVIEW = "review"
+    COMPLETED = "completed"
+
+
 class CandidateStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.core.config import Settings
@@ -35,7 +37,7 @@ def test_extract_rejects_documents_without_readable_text() -> None:
         )
 
 
-def test_storage_path_cannot_escape_upload_root(tmp_path) -> None:
+def test_storage_path_cannot_escape_upload_root(tmp_path: Path) -> None:
     with pytest.raises(DocumentProcessingError, match="path is invalid"):
         resolve_storage_path(tmp_path / "uploads", "../private.txt")
 

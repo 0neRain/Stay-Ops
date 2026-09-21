@@ -164,12 +164,12 @@ async def test_send_message_records_failed_provider_delivery(
         message = await session.scalar(
             select(Message).where(Message.conversation_id == conversation_id)
         )
+        assert message is not None
         events = list(
             await session.scalars(
                 select(AuditEvent).where(AuditEvent.entity_id == message.id)
             )
         )
-    assert message is not None
     assert message.delivery_status == DeliveryStatus.FAILED
     assert message.provider_message_id is None
     assert [event.event_type for event in events] == [

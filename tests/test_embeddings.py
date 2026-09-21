@@ -68,6 +68,9 @@ class CountingEmbeddingProvider:
     async def embed_document(self, _: str) -> list[float]:
         return [0.4, 0.5, 0.6]
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [await self.embed_document(text) for text in texts]
+
 
 async def test_cached_provider_reuses_query_embedding_for_retrieval_and_validation() -> None:
     delegate = CountingEmbeddingProvider()

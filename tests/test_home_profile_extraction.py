@@ -50,6 +50,7 @@ class HangingExtractionModel:
     async def ainvoke(self, messages: object) -> object:
         del messages
         await asyncio.Event().wait()
+        raise AssertionError("The hanging model should only be stopped by a timeout")
 
 
 def mock_source() -> HomeSourceDocument:

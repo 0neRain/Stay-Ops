@@ -4,14 +4,17 @@ from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.routes.knowledge import get_document_job_queue
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.models.domain import Property
-from app.models.enums import PropertyOnboardingStatus
+from app.models.domain import KnowledgeChunk, KnowledgeDocument, KnowledgeVersion, Property
+from app.models.enums import KnowledgeStatus, PropertyOnboardingStatus
 from app.services.document_ingestion import InProcessDocumentQueue
+from app.services.knowledge import KnowledgeRetriever
+from app.services.profile_knowledge import PROFILE_DOCUMENT_TYPE, PROFILE_SOURCE_KIND
 from app.services.property_onboarding import can_attach_documents
 
 REGISTRATION = {
@@ -80,6 +83,7 @@ Check-in: 15:00
 Check-out: 10:00
 Wi-Fi network: CasaVerde_Guest
 Wi-Fi password: must-not-be-extracted
+Parking: Use the private courtyard.
 Access instructions: Enter through the courtyard gate.
 House rules: No smoking; quiet hours after 22:00.
 Amenities: Air conditioning; washer; travel cot.
@@ -157,6 +161,79 @@ Amenities: Air conditioning; washer; travel cot.
         assert property_record.name == "Casa Verde Firenze"
         assert property_record.address_json["formatted"] == "Via Verde 12, Florence, Italy"
         assert property_record.operational_details["check_in_time"] == "15:00"
+
+        profile_document = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.property_id == property_record.id,
+                KnowledgeDocument.document_type == PROFILE_DOCUMENT_TYPE,
+            )
+        )
+        assert profile_document is not None
+        assert profile_document.status == KnowledgeStatus.PUBLISHED
+        assert profile_document.title == "Casa Verde Firenze — confirmed profile"
+
+        source_document = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.property_id == property_record.id,
+                KnowledgeDocument.original_filename == "casa-verde.md",
+            )
+        )
+        assert source_document is not None
+        assert source_document.status == KnowledgeStatus.ARCHIVED
+
+        profile_version = await session.scalar(
+            select(KnowledgeVersion).where(
+                KnowledgeVersion.document_id == profile_document.id
+            )
+        )
+        assert profile_version is not None
+        assert profile_version.version == 1
+        assert profile_version.approved_by_id is not None
+        assert profile_version.approved_at is not None
+        assert profile_version.embedding_status == "pending"
+        assert "Home name: Casa Verde Firenze" in profile_version.content
+        assert "Paid street parking is available nearby." in profile_version.content
+
+        profile_chunks = list(
+            (
+                await session.scalars(
+                    select(KnowledgeChunk)
+                    .where(KnowledgeChunk.version_id == profile_version.id)
+                    .order_by(KnowledgeChunk.chunk_index)
+                )
+            ).all()
+        )
+        assert profile_chunks
+        assert all(
+            chunk.metadata_json["source_kind"] == PROFILE_SOURCE_KIND
+            for chunk in profile_chunks
+        )
+
+        hits = await KnowledgeRetriever(session).search(
+            tenant_id=tenant_id,
+            property_id=property_record.id,
+            query="What are the parking instructions?",
+        )
+        assert hits
+        assert hits[0].document_id == profile_document.id
+        assert hits[0].content == (
+            "Parking instructions: Paid street parking is available nearby."
+        )
+        assert all("private courtyard" not in hit.content for hit in hits)
+
+    support_response = await api_client.post(
+        "/api/v1/chat/messages",
+        headers=headers,
+        json={
+            "property_id": draft["id"],
+            "content": "What are the parking instructions?",
+        },
+    )
+    assert support_response.status_code == 201
+    assert support_response.json()["action"] == "answered"
+    assert support_response.json()["reply"] == (
+        "Parking instructions: Paid street parking is available nearby."
+    )
 
 
 async def test_narrative_mock_profile_is_returned_by_extraction_api(

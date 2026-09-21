@@ -14,7 +14,7 @@ async def test_health() -> None:
 async def test_frontend_routes_serve_the_application() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        for route in ("/", "/auth", "/dashboard"):
+        for route in ("/", "/auth", "/dashboard", "/homes"):
             response = await client.get(route)
             assert response.status_code == 200
             assert "StayOps" in response.text
@@ -33,6 +33,8 @@ async def test_frontend_routes_serve_the_application() -> None:
     assert 'aria-label="Document ingestion progress"' in script.text
     assert "formatIngestionEta" in script.text
     assert "StayOpsProfileForm.fillHomeProfileForm" in script.text
+    assert "Homes & knowledge" in script.text
+    assert 'href="/homes"' in script.text
 
 
 async def test_auth_routes_are_in_openapi_schema() -> None:
@@ -51,3 +53,5 @@ async def test_auth_routes_are_in_openapi_schema() -> None:
     assert "/api/v1/escalations/{escalation_id}/resolve" in paths
     assert "/api/v1/knowledge/documents" in paths
     assert "/api/v1/knowledge/documents/{document_id}" in paths
+    assert "/api/v1/properties" in paths
+    assert "/api/v1/properties/{property_id}" in paths

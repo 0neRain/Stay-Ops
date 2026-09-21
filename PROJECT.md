@@ -118,8 +118,9 @@ foundation; `Planned` routes define the intended public contract.
 
 | Method | Route | Status | Purpose |
 |---|---|---:|---|
-| GET/POST | `/api/v1/properties` | Planned | List or create properties |
-| GET/PATCH | `/api/v1/properties/{property_id}` | Planned | Read or update a property |
+| GET | `/api/v1/properties` | Implemented | List the active tenant's homes |
+| POST | `/api/v1/properties` | Planned | Create a property outside onboarding |
+| GET/PATCH | `/api/v1/properties/{property_id}` | Implemented | Read or update a home profile and its knowledge sources |
 | GET/POST | `/api/v1/integrations` | Planned | List or connect PMS providers |
 | GET | `/api/v1/integrations/{integration_id}/health` | Planned | Check provider access |
 | POST | `/api/v1/webhooks/{provider}` | Planned | Receive authenticated PMS events |
@@ -142,6 +143,7 @@ foundation; `Planned` routes define the intended public contract.
 |---|---|---:|---|
 | POST | `/api/v1/knowledge/documents` | Implemented | Upload and enqueue a knowledge source for processing |
 | GET | `/api/v1/knowledge/documents/{document_id}` | Implemented | Read tenant-scoped processing and review status |
+| PATCH | `/api/v1/knowledge/documents/{document_id}` | Implemented | Create a manually edited knowledge-source version |
 | GET | `/api/v1/knowledge/candidates` | Planned | List suggested improvements |
 | POST | `/api/v1/knowledge/candidates/{candidate_id}/approve` | Planned | Publish a reviewed candidate |
 | POST | `/api/v1/knowledge/candidates/{candidate_id}/reject` | Planned | Reject a candidate with a reason |

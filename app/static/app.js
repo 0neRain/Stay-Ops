@@ -41,6 +41,7 @@ const state = {
   notificationOpen: false,
   readNotifications: new Set(),
   homeOnboarding: { draft: null, selectedFiles: [], uploading: false },
+  homesCatalog: { items: [], selectedId: null, detail: null, loading: false },
 };
 
 function escapeHtml(value) {
@@ -335,6 +336,29 @@ function notificationPanel() {
   return `<div class="notification-panel ${state.notificationOpen ? "open" : ""}" id="notification-panel"><div class="notification-head"><strong>Handoffs & updates</strong><button type="button" id="mark-read">Mark all read</button></div>${notifications.map((item) => `<button class="notification-item ${state.readNotifications.has(item.id) ? "read" : ""}" type="button" data-notification="${item.id}" data-thread="${item.thread}"><span class="notify-dot"></span><span class="notification-copy"><strong>${item.title}</strong><span>${item.detail}</span></span><span class="notification-time">${item.time}</span></button>`).join("")}</div>`;
 }
 
+function dashboardRail(activePage, initials) {
+  const navItem = (page, href, iconName, label) => `
+    <a class="rail-button ${activePage === page ? "active" : ""}" href="${href}" data-link aria-label="${label}" title="${label}">
+      ${icon(iconName)}<span class="rail-label">${label}</span>
+    </a>`;
+  const calendarItem = activePage === "inbox"
+    ? `<button class="rail-button" type="button" aria-label="Calendar" title="Calendar" data-scroll-calendar>${icon("calendar")}<span class="rail-label">Calendar</span></button>`
+    : navItem("calendar", "/dashboard", "calendar", "Calendar");
+  return `<aside class="side-rail" aria-label="Dashboard navigation">
+    ${brand(false)}
+    <nav class="rail-nav">
+      ${navItem("inbox", "/dashboard", "message", "Inbox")}
+      <a class="rail-button ${activePage === "homes" ? "active" : ""}" href="/homes" data-link aria-label="Homes and knowledge" title="Homes and knowledge">
+        ${icon("home")}<span class="rail-label">Homes</span>
+      </a>
+      ${calendarItem}
+      <button class="rail-button" type="button" aria-label="Analytics" title="Analytics">${icon("chart")}<span class="rail-label">Analytics</span></button>
+      <button class="rail-button" type="button" aria-label="Settings" title="Settings">${icon("settings")}<span class="rail-label">Settings</span></button>
+    </nav>
+    <button class="rail-profile" id="logout-button" aria-label="Sign out" title="Sign out">${escapeHtml(initials)}</button>
+  </aside>`;
+}
+
 function dashboardPage() {
   const savedUser = JSON.parse(localStorage.getItem("stayops_user") || "null");
   const initials = savedUser?.full_name ? savedUser.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("").toUpperCase() : "AM";
@@ -342,7 +366,7 @@ function dashboardPage() {
   return `
     <a class="skip-link" href="#dashboard-content">Skip to dashboard</a>
     <div class="dashboard-page"><div class="dashboard-shell">
-      <aside class="side-rail" aria-label="Dashboard navigation">${brand(false).replace('<span class="brand-name">StayOps</span>', "")}<nav class="rail-nav"><button class="rail-button active" aria-label="Guest inbox" title="Guest inbox">${icon("message")}</button><button class="rail-button" aria-label="Calendar" title="Calendar" data-scroll-calendar>${icon("calendar")}</button><button class="rail-button" aria-label="Analytics" title="Analytics">${icon("chart")}</button><button class="rail-button" aria-label="Settings" title="Settings">${icon("settings")}</button></nav><button class="rail-profile" id="logout-button" aria-label="Sign out" title="Sign out">${escapeHtml(initials)}</button></aside>
+      ${dashboardRail("inbox", initials)}
       <main class="dashboard-main" id="dashboard-content">
         <header class="dash-header"><div class="dash-header-title"><h1>Guest operations</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><span class="date-chip">${icon("calendar", "icon icon-sm")} Monday, Sep 14</span><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a><div class="notification-wrap"><button class="icon-button" id="notification-button" type="button" aria-label="Open handoff notifications" aria-expanded="${state.notificationOpen}">${icon("bell")}${unread ? `<span class="notification-count">${unread}</span>` : ""}</button>${notificationPanel()}</div></div></header>
         <div class="dashboard-content">
@@ -352,6 +376,182 @@ function dashboardPage() {
         </div>
       </main>
     </div></div>`;
+}
+
+function homesPage() {
+  const savedUser = JSON.parse(localStorage.getItem("stayops_user") || "null");
+  const initials = savedUser?.full_name
+    ? savedUser.full_name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()
+    : "AM";
+  const authenticated = Boolean(localStorage.getItem("stayops_token"));
+  return `
+    <a class="skip-link" href="#homes-content">Skip to homes</a>
+    <div class="dashboard-page homes-page"><div class="dashboard-shell">
+      ${dashboardRail("homes", initials)}
+      <main class="dashboard-main" id="homes-content">
+        <header class="dash-header"><div class="dash-header-title"><h1>Homes & knowledge</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a></div></header>
+        ${authenticated
+          ? `<div class="homes-loading" id="homes-catalog"><span class="loading-ring"></span><strong>Loading your homes…</strong></div>`
+          : `<div class="homes-auth-gate"><span class="feature-icon">${icon("shield")}</span><h2>Sign in to view your homes</h2><p>Home knowledge is private to your workspace.</p><a class="btn btn-primary" href="/auth" data-link>Sign in ${icon("arrow", "icon icon-sm")}</a></div>`}
+      </main>
+    </div></div>`;
+}
+
+function propertyListMarkup(items, selectedId) {
+  if (!items.length) {
+    return `<div class="homes-empty-list"><strong>No homes yet</strong><span>Add a home to start building its knowledge base.</span></div>`;
+  }
+  return items.map((item) => `
+    <button class="property-list-item ${item.id === selectedId ? "active" : ""}" type="button" data-property-id="${item.id}">
+      <span class="property-list-icon">${icon("home", "icon icon-sm")}</span>
+      <span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.address || item.property_type || (item.is_active ? "Active home" : "Setup in progress"))}</small></span>
+      <span class="source-count">${item.knowledge_source_count}</span>
+    </button>`).join("");
+}
+
+function catalogProfileFieldMarkup(field, detail) {
+  const value = StayOpsProfileForm.formatProfileValue(field.key, detail.profile?.[field.key] || "");
+  if (!detail.can_edit) {
+    return `<div class="knowledge-field ${field.wide ? "wide" : ""}"><span>${field.label}</span><div class="knowledge-value ${value ? "" : "empty"}">${value ? escapeHtml(value).replaceAll("\n", "<br>") : "Not provided"}</div></div>`;
+  }
+  const control = field.multiline
+    ? `<textarea id="catalog-${field.key}" name="${field.key}" rows="4" placeholder="${escapeHtml(field.placeholder || "")}">${escapeHtml(value)}</textarea>`
+    : `<input id="catalog-${field.key}" name="${field.key}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>`;
+  return `<div class="knowledge-field ${field.wide ? "wide" : ""}"><label for="catalog-${field.key}">${field.label}${field.required ? " *" : ""}</label>${control}</div>`;
+}
+
+function knowledgeSourceMarkup(source) {
+  const status = source.status.replaceAll("_", " ");
+  const identity = source.filename || source.document_type.replaceAll("_", " ");
+  const content = source.content || "";
+  return `
+    <article class="knowledge-source-card" data-source-card="${source.id}">
+      <header><div><span class="knowledge-source-icon">${icon(source.is_profile ? "home" : "file", "icon icon-sm")}</span><span><strong>${escapeHtml(source.title)}</strong><small>${escapeHtml(identity)} · ${escapeHtml(status)}${source.version ? ` · v${source.version}` : ""}</small></span></div><span class="knowledge-status ${source.status}">${escapeHtml(status)}</span></header>
+      ${content
+        ? source.can_edit
+          ? `<textarea class="source-content-editor" data-source-content="${source.id}" aria-label="Knowledge content for ${escapeHtml(source.title)}">${escapeHtml(content)}</textarea><div class="source-actions"><span class="source-save-state" data-source-state="${source.id}"></span><button class="btn btn-outline btn-small" type="button" data-save-source="${source.id}">Save source</button></div>`
+          : `<pre class="source-content">${escapeHtml(content)}</pre>`
+        : `<div class="source-content-empty">${source.processing_status === "failed" ? "This source could not be processed." : "No readable content is available yet."}</div>`}
+      ${source.is_profile ? `<p class="generated-source-note">Generated from the structured home profile above.</p>` : ""}
+    </article>`;
+}
+
+function propertyDetailMarkup(detail) {
+  const sources = detail.knowledge_sources || [];
+  return `
+    <div class="property-detail-head"><div><span class="flow-kicker">${detail.is_active ? "Active home" : "Setup in progress"}</span><h2>${escapeHtml(detail.name)}</h2><p>${sources.length} knowledge source${sources.length === 1 ? "" : "s"} connected to this home.</p></div>${detail.can_edit ? `<span class="permission-chip">${icon("check", "icon icon-xs")} You can edit</span>` : `<span class="permission-chip readonly">Read only</span>`}</div>
+    <section class="home-knowledge-section"><div class="section-title"><div><h3>Home profile</h3><p>The operational details used to answer guest questions.</p></div></div>
+      <form id="catalog-profile-form" class="catalog-profile-form"><div class="knowledge-grid">${homeProfileFields.map((field) => catalogProfileFieldMarkup(field, detail)).join("")}</div>${detail.can_edit ? `<div class="catalog-save-row"><span class="catalog-save-state" id="catalog-profile-state"></span><button class="btn btn-primary" type="submit">Save home profile ${icon("check", "icon icon-sm")}</button></div>` : ""}</form>
+    </section>
+    <section class="home-knowledge-section sources-section"><div class="section-title"><div><h3>Knowledge sources</h3><p>Uploaded guides and generated knowledge, including archived reference material.</p></div><span>${sources.length} total</span></div>
+      <div class="knowledge-source-list">${sources.length ? sources.map(knowledgeSourceMarkup).join("") : `<div class="empty-knowledge"><strong>No knowledge sources yet</strong><span>Upload a guide from the home setup flow to add one.</span></div>`}</div>
+    </section>`;
+}
+
+function bindHomesCatalogEvents() {
+  document.querySelectorAll("[data-property-id]").forEach((button) => button.addEventListener("click", () => loadPropertyDetail(button.dataset.propertyId)));
+  document.querySelector("#catalog-profile-form")?.addEventListener("submit", handleCatalogProfileSave);
+  document.querySelectorAll("[data-save-source]").forEach((button) => button.addEventListener("click", () => handleKnowledgeSourceSave(button.dataset.saveSource)));
+}
+
+function renderHomesCatalog() {
+  const catalog = document.querySelector("#homes-catalog");
+  if (!catalog) return;
+  if (!state.homesCatalog.items.length) {
+    catalog.className = "homes-empty";
+    catalog.innerHTML = `<span class="feature-icon">${icon("home")}</span><h2>No homes in this workspace yet</h2><p>Add your first home and upload its guidebooks to build the knowledge base.</p><a class="btn btn-primary" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add a home</a>`;
+    catalog.querySelector("[data-link]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigate("/homes/new");
+    });
+    return;
+  }
+  catalog.className = "homes-catalog";
+  catalog.innerHTML = `<aside class="property-list-pane"><div class="property-list-head"><span>Workspace homes</span><strong>${state.homesCatalog.items.length}</strong></div><div class="property-list">${propertyListMarkup(state.homesCatalog.items, state.homesCatalog.selectedId)}</div></aside><section class="property-knowledge-pane" id="property-knowledge-pane">${state.homesCatalog.detail ? propertyDetailMarkup(state.homesCatalog.detail) : `<div class="detail-loading"><span class="loading-ring"></span><span>Loading home knowledge…</span></div>`}</section>`;
+  bindHomesCatalogEvents();
+}
+
+async function initializeHomesCatalog() {
+  if (!localStorage.getItem("stayops_token") || state.homesCatalog.loading) return;
+  state.homesCatalog.loading = true;
+  try {
+    const items = await apiRequest("/api/v1/properties");
+    state.homesCatalog.items = items;
+    if (!items.length) {
+      state.homesCatalog.selectedId = null;
+      state.homesCatalog.detail = null;
+      renderHomesCatalog();
+      return;
+    }
+    const selected = items.some((item) => item.id === state.homesCatalog.selectedId)
+      ? state.homesCatalog.selectedId
+      : items[0].id;
+    state.homesCatalog.selectedId = selected;
+    state.homesCatalog.detail = null;
+    renderHomesCatalog();
+    await loadPropertyDetail(selected);
+  } catch (error) {
+    const catalog = document.querySelector("#homes-catalog");
+    if (catalog) {
+      catalog.className = "homes-error";
+      catalog.innerHTML = `<span class="feature-icon">${icon("alert")}</span><h2>We couldn’t load your homes</h2><p>${escapeHtml(error.message)}</p><button class="btn btn-outline" id="retry-homes" type="button">Try again</button>`;
+      catalog.querySelector("#retry-homes")?.addEventListener("click", () => { state.homesCatalog.loading = false; initializeHomesCatalog(); });
+    }
+  } finally {
+    state.homesCatalog.loading = false;
+  }
+}
+
+async function loadPropertyDetail(propertyId) {
+  state.homesCatalog.selectedId = propertyId;
+  state.homesCatalog.detail = null;
+  renderHomesCatalog();
+  try {
+    state.homesCatalog.detail = await apiRequest(`/api/v1/properties/${propertyId}`);
+    renderHomesCatalog();
+  } catch (error) {
+    const panel = document.querySelector("#property-knowledge-pane");
+    if (panel) panel.innerHTML = `<div class="homes-error"><h2>We couldn’t load this home</h2><p>${escapeHtml(error.message)}</p></div>`;
+  }
+}
+
+async function handleCatalogProfileSave(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const saveState = form.querySelector("#catalog-profile-state");
+  button.disabled = true;
+  saveState.textContent = "Saving changes…";
+  try {
+    const profile = Object.fromEntries(new FormData(form));
+    const detail = await apiRequest(`/api/v1/properties/${state.homesCatalog.selectedId}`, { method: "PATCH", body: JSON.stringify(profile) });
+    state.homesCatalog.detail = detail;
+    state.homesCatalog.items = await apiRequest("/api/v1/properties");
+    renderHomesCatalog();
+    toast("Home knowledge updated.");
+  } catch (error) {
+    saveState.textContent = error.message || "The home profile could not be saved.";
+    button.disabled = false;
+  }
+}
+
+async function handleKnowledgeSourceSave(sourceId) {
+  const editor = document.querySelector(`[data-source-content="${sourceId}"]`);
+  const button = document.querySelector(`[data-save-source="${sourceId}"]`);
+  const saveState = document.querySelector(`[data-source-state="${sourceId}"]`);
+  if (!editor || !button) return;
+  button.disabled = true;
+  saveState.textContent = "Saving new version…";
+  try {
+    const source = await apiRequest(`/api/v1/knowledge/documents/${sourceId}`, { method: "PATCH", body: JSON.stringify({ content: editor.value }) });
+    const index = state.homesCatalog.detail.knowledge_sources.findIndex((item) => item.id === source.id);
+    if (index >= 0) state.homesCatalog.detail.knowledge_sources[index] = source;
+    renderHomesCatalog();
+    toast("Knowledge source updated.");
+  } catch (error) {
+    saveState.textContent = error.message || "The knowledge source could not be saved.";
+    button.disabled = false;
+  }
 }
 
 const homeProfileFields = [
@@ -774,10 +974,11 @@ function renderRoute() {
   const path = window.location.pathname.replace(/\/$/, "") || "/";
   if (path === "/auth") app.innerHTML = authPage();
   else if (path === "/dashboard") app.innerHTML = dashboardPage();
+  else if (path === "/homes") app.innerHTML = homesPage();
   else if (path === "/homes/new") app.innerHTML = newHomePage();
   else app.innerHTML = landingPage();
   bindEvents(path);
-  document.title = path === "/dashboard" ? "Guest Operations — StayOps" : path === "/auth" ? "Sign in — StayOps" : path === "/homes/new" ? "Add a home — StayOps" : "StayOps — Guest operations, in one place";
+  document.title = path === "/dashboard" ? "Guest Operations — StayOps" : path === "/homes" ? "Homes & Knowledge — StayOps" : path === "/auth" ? "Sign in — StayOps" : path === "/homes/new" ? "Add a home — StayOps" : "StayOps — Guest operations, in one place";
 }
 
 function bindEvents(path) {
@@ -820,6 +1021,11 @@ function bindEvents(path) {
     document.querySelector("[data-scroll-calendar]")?.addEventListener("click", () => document.querySelector("#reservation-calendar")?.scrollIntoView({ behavior: "smooth" }));
     document.querySelector("#logout-button")?.addEventListener("click", handleLogout);
     setTimeout(() => { const messages = document.querySelector("#messages"); if (messages) messages.scrollTop = messages.scrollHeight; }, 0);
+  }
+
+  if (path === "/homes") {
+    document.querySelector("#logout-button")?.addEventListener("click", handleLogout);
+    initializeHomesCatalog();
   }
 
   if (path === "/homes/new") initializeHomeOnboarding();
@@ -879,6 +1085,7 @@ async function handleLogout() {
   try { await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }); } catch (_) { /* local sign-out still succeeds */ }
   localStorage.removeItem("stayops_token");
   localStorage.removeItem("stayops_user");
+  state.homesCatalog = { items: [], selectedId: null, detail: null, loading: false };
   navigate("/");
   toast("You’re signed out.");
 }

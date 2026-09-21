@@ -4,7 +4,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import DocumentProcessingStatus, PropertyOnboardingStatus
+from app.models.enums import (
+    DocumentProcessingStatus,
+    KnowledgeStatus,
+    PropertyOnboardingStatus,
+)
 
 HOME_PROFILE_FIELDS = (
     "name",
@@ -95,3 +99,38 @@ class HomeOnboardingResponse(BaseModel):
     extraction_stage: str | None = None
     extraction_eta_seconds: int | None = None
     created_at: datetime
+
+
+class PropertySummaryResponse(BaseModel):
+    id: UUID
+    name: str
+    address: str | None = None
+    property_type: str | None = None
+    is_active: bool
+    knowledge_source_count: int = 0
+    updated_at: datetime
+
+
+class PropertyKnowledgeSourceResponse(BaseModel):
+    id: UUID
+    title: str
+    document_type: str
+    status: KnowledgeStatus
+    processing_status: DocumentProcessingStatus
+    filename: str | None = None
+    content: str = ""
+    version: int | None = None
+    is_profile: bool = False
+    can_edit: bool = False
+    updated_at: datetime
+
+
+class PropertyDetailResponse(BaseModel):
+    id: UUID
+    name: str
+    is_active: bool
+    profile: HomeProfileDraft
+    knowledge_sources: list[PropertyKnowledgeSourceResponse] = Field(default_factory=list)
+    can_edit: bool = False
+    created_at: datetime
+    updated_at: datetime

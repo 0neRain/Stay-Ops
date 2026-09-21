@@ -18,6 +18,7 @@ from app.schemas.properties import (
     OnboardingDocumentSummary,
 )
 from app.services.home_profile_extraction import HomeSourceDocument, extract_home_profile
+from app.services.profile_knowledge import publish_confirmed_profile
 
 
 class PropertyOnboardingError(Exception):
@@ -277,6 +278,13 @@ class PropertyOnboardingService:
         )
         property_record.operational_details = details
         property_record.is_active = True
+        publication = await publish_confirmed_profile(
+            self._session,
+            tenant_id=tenant_id,
+            property_id=property_id,
+            actor_user_id=actor_user_id,
+            profile=profile_data,
+        )
         document_count = (
             await self._session.scalar(
                 select(func.count(KnowledgeDocument.id)).where(
@@ -293,7 +301,11 @@ class PropertyOnboardingService:
                 event_type="property.onboarding_completed",
                 entity_type="property",
                 entity_id=property_record.id,
-                details={"document_count": document_count},
+                details={
+                    "document_count": document_count,
+                    "profile_document_id": str(publication.document_id),
+                    "profile_version": publication.version,
+                },
             )
         )
         await self._session.commit()

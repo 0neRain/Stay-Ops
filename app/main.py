@@ -48,6 +48,7 @@ async def health() -> dict[str, str]:
 @app.get("/", include_in_schema=False)
 @app.get("/auth", include_in_schema=False)
 @app.get("/dashboard", include_in_schema=False)
+@app.get("/homes", include_in_schema=False)
 @app.get("/homes/new", include_in_schema=False)
 async def frontend() -> FileResponse:
     return FileResponse(frontend_dir / "index.html")

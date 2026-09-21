@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.domain import KnowledgeChunk, KnowledgeDocument, KnowledgeVersion
 from app.models.enums import KnowledgeStatus
 from app.services.embeddings import EmbeddingProvider, EmbeddingProviderError
+from app.services.profile_knowledge import PROFILE_SOURCE_KIND
 
 _STOP_WORDS = {
     "a",
@@ -130,7 +131,6 @@ class KnowledgeRetriever:
             )
             .where(
                 KnowledgeVersion.approved_at.is_not(None),
-                KnowledgeVersion.embedding_status == "ready",
             )
             .group_by(KnowledgeVersion.document_id)
             .subquery()
@@ -173,11 +173,10 @@ class KnowledgeRetriever:
                 KnowledgeDocument.tenant_id == tenant_id,
                 KnowledgeDocument.status == KnowledgeStatus.PUBLISHED,
                 KnowledgeDocument.document_type != "support_policy",
-                KnowledgeVersion.embedding_status == "ready",
             )
         )
         if distance is not None:
-            statement = statement.order_by(distance).limit(max(limit * 5, 20))
+            statement = statement.order_by(distance)
         rows = (await self.session.execute(statement)).all()
         hits = [
             KnowledgeHit(
@@ -200,4 +199,12 @@ class KnowledgeRetriever:
             for chunk, version, document, vector_distance in rows
         ]
         eligible = [hit for hit in hits if hit.score >= minimum_score]
-        return sorted(eligible, key=lambda hit: (-hit.score, hit.title, str(hit.chunk_id)))[:limit]
+        return sorted(
+            eligible,
+            key=lambda hit: (
+                -hit.score,
+                hit.metadata.get("source_kind") != PROFILE_SOURCE_KIND,
+                hit.title,
+                str(hit.chunk_id),
+            ),
+        )[:limit]

@@ -28,7 +28,8 @@ from app.models.enums import (
     KnowledgeStatus,
     MembershipRole,
 )
-from app.schemas.knowledge import DocumentResponse
+from app.schemas.knowledge import DocumentContentUpdate, DocumentResponse
+from app.schemas.properties import PropertyKnowledgeSourceResponse
 from app.services.document_ingestion import (
     SUPPORTED_DOCUMENT_TYPES,
     DocumentJobQueue,
@@ -38,6 +39,11 @@ from app.services.document_ingestion import (
     store_upload,
 )
 from app.services.embeddings import configured_embedding_provider
+from app.services.property_catalog import (
+    PropertyCatalogConflictError,
+    PropertyCatalogNotFoundError,
+    PropertyCatalogService,
+)
 from app.services.property_onboarding import can_attach_documents
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge base"])
@@ -221,3 +227,36 @@ async def get_document(
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return await _document_response(document, session)
+
+
+@router.patch(
+    "/documents/{document_id}",
+    response_model=PropertyKnowledgeSourceResponse,
+)
+async def update_document_content(
+    document_id: UUID,
+    update: DocumentContentUpdate,
+    context: KnowledgeEditor,
+    session: DatabaseSession,
+    settings: AppSettings,
+) -> PropertyKnowledgeSourceResponse:
+    service = PropertyCatalogService(session)
+    try:
+        property_id = await service.update_knowledge_source(
+            tenant_id=context.tenant.id,
+            document_id=document_id,
+            actor_user_id=context.user.id,
+            content=update.content,
+            chunk_characters=settings.document_chunk_characters,
+            chunk_overlap=settings.document_chunk_overlap,
+        )
+        property_detail = await service.get_property(
+            tenant_id=context.tenant.id,
+            property_id=property_id,
+            can_edit=True,
+        )
+    except PropertyCatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PropertyCatalogConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return next(source for source in property_detail.knowledge_sources if source.id == document_id)

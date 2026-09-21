@@ -606,6 +606,10 @@ function renderReviewStep(draft) {
       <div class="flow-error" id="home-flow-error" role="alert"></div>
       <div class="flow-actions"><button class="btn btn-ghost" id="back-to-documents" type="button">${icon("back", "icon icon-sm")} Add more documents</button><button class="btn btn-primary" id="save-home" type="submit">Save and activate home ${icon("check", "icon icon-sm")}</button></div>
     </form>`;
+  window.StayOpsProfileForm.fillHomeProfileForm(
+    document.querySelector("#home-review-form"),
+    draft.profile,
+  );
   document.querySelector("#back-to-documents")?.addEventListener("click", () => renderUploadStep(draft));
   document.querySelector("#home-review-form")?.addEventListener("submit", handleHomeReview);
 }

@@ -67,9 +67,16 @@ def can_attach_documents(property_record: Property) -> bool:
 
 
 class PropertyOnboardingService:
-    def __init__(self, session: AsyncSession, *, extraction_model: Any | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        extraction_model: Any | None = None,
+        extraction_timeout_seconds: float | None = None,
+    ) -> None:
         self._session = session
         self._extraction_model = extraction_model
+        self._extraction_timeout_seconds = extraction_timeout_seconds
 
     async def create(self, *, tenant_id: UUID, actor_user_id: UUID) -> HomeOnboardingResponse:
         property_record = Property(
@@ -158,7 +165,11 @@ class PropertyOnboardingService:
         await self._session.commit()
 
         try:
-            extracted = await extract_home_profile(sources, model=self._extraction_model)
+            extracted = await extract_home_profile(
+                sources,
+                model=self._extraction_model,
+                model_timeout_seconds=self._extraction_timeout_seconds,
+            )
         except asyncio.CancelledError:
             await self._restore_after_extraction_failure(
                 tenant_id=tenant_id,

@@ -20,15 +20,19 @@ async def test_frontend_routes_serve_the_application() -> None:
             assert "StayOps" in response.text
 
         stylesheet = await client.get("/static/styles.css")
+        profile_form_script = await client.get("/static/profile-form.js")
         script = await client.get("/static/app.js")
 
     assert stylesheet.status_code == 200
     assert "text/css" in stylesheet.headers["content-type"]
     assert ".ingestion-progress-track" in stylesheet.text
+    assert profile_form_script.status_code == 200
+    assert "fillHomeProfileForm" in profile_form_script.text
     assert script.status_code == 200
     assert "javascript" in script.headers["content-type"]
     assert 'aria-label="Document ingestion progress"' in script.text
     assert "formatIngestionEta" in script.text
+    assert "StayOpsProfileForm.fillHomeProfileForm" in script.text
 
 
 async def test_auth_routes_are_in_openapi_schema() -> None:

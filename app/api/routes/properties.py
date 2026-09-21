@@ -79,6 +79,7 @@ async def extract_home_onboarding(
     service = PropertyOnboardingService(
         session,
         extraction_model=configured_answering_model(settings, max_tokens=1_600),
+        extraction_timeout_seconds=settings.openrouter_timeout_seconds,
     )
     try:
         return await service.extract(

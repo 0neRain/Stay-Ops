@@ -159,6 +159,66 @@ Amenities: Air conditioning; washer; travel cot.
         assert property_record.operational_details["check_in_time"] == "15:00"
 
 
+async def test_narrative_mock_profile_is_returned_by_extraction_api(
+    api_client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        app_env="test",
+        document_storage_root=tmp_path / "uploads",
+        openrouter_api_key=None,
+        openrouter_chat_api_key=None,
+        openrouter_embedding_api_key=None,
+    )
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_document_job_queue] = lambda: InProcessDocumentQueue(
+        db_session_factory,
+        settings=settings,
+        embedding_provider=None,
+    )
+    token, _ = await _register(api_client)
+    headers = {"Authorization": f"Bearer {token}"}
+    draft = (
+        await api_client.post("/api/v1/properties/onboarding", headers=headers)
+    ).json()
+    mock_path = Path(__file__).parents[1] / "mock_uploads" / "casa-oliva-guest-guide.md"
+
+    upload = await api_client.post(
+        "/api/v1/knowledge/documents",
+        headers=headers,
+        data={
+            "title": "Casa Oliva guest guide",
+            "document_type": "house_manual",
+            "property_id": draft["id"],
+        },
+        files={"file": (mock_path.name, mock_path.read_bytes(), "text/markdown")},
+    )
+    assert upload.status_code == 202
+
+    response = await api_client.post(
+        f"/api/v1/properties/{draft['id']}/onboarding/extract",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "review"
+    assert payload["profile"]["name"] == "Casa Oliva"
+    assert payload["profile"]["address"] == "Via delle Ginestre 18, 55100 Lucca LU, Italy"
+    assert payload["profile"]["guest_capacity"] == "6"
+    assert payload["profile"]["bedrooms"] == "3"
+    assert payload["profile"]["check_in_time"] == "4:00 p.m."
+    assert payload["profile"]["wifi_network"] == "CasaOliva-Guest"
+    assert payload["profile"]["house_rules"].startswith("- ")
+    assert "\n- " in payload["profile"]["amenities"]
+    assert "Item | Guest information" not in payload["profile"]["amenities"]
+    assert payload["profile"]["timezone"] is None
+    assert payload["profile"]["bathrooms"] is None
+    assert payload["evidence"]["name"]["source_filename"] == mock_path.name
+    assert "password" not in response.text.casefold()
+
+
 async def test_home_onboarding_requires_authentication(api_client: httpx.AsyncClient) -> None:
     response = await api_client.post("/api/v1/properties/onboarding")
 

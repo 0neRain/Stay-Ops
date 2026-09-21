@@ -107,6 +107,7 @@ class PropertySummaryResponse(BaseModel):
     address: str | None = None
     property_type: str | None = None
     is_active: bool
+    is_demo: bool = False
     knowledge_source_count: int = 0
     updated_at: datetime
 

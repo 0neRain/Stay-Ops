@@ -100,6 +100,7 @@ async def test_catalog_lists_reads_and_updates_home_knowledge(
             "address": "Via Catalogo 8, Rome",
             "property_type": None,
             "is_active": True,
+            "is_demo": False,
             "knowledge_source_count": 1,
             "updated_at": listing.json()[0]["updated_at"],
         }

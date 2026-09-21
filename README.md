@@ -26,6 +26,14 @@ See [PROJECT.md](PROJECT.md) for the product and API specification.
    `python -m scripts.seed_mock_knowledge`. The embedding model is preconfigured as
    `openai/text-embedding-3-small`.
 
+   The seed also creates the only active account attached to the demo tenant:
+
+   - Email: `test@admin.com`
+   - Password: `adminadmin0000`
+
+   Accounts registered through the application receive their own empty tenant and do not
+   inherit the demo homes or dashboard data.
+
    The mock seed writes only to `MOCK_DATABASE_URL`. Embeddings are cached by content hash,
    provider, model, and dimensions in `.cache/mock_embeddings.sqlite3`. Editing or adding mock
    chunks and rerunning the command embeds only new content. Changing the embedding model

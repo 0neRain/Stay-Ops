@@ -33,6 +33,8 @@ async def test_frontend_routes_serve_the_application() -> None:
     assert 'aria-label="Document ingestion progress"' in script.text
     assert "formatIngestionEta" in script.text
     assert "StayOpsProfileForm.fillHomeProfileForm" in script.text
+    assert 'property.is_demo' in script.text
+    assert "No guest activity yet" in script.text
     assert "Homes & knowledge" in script.text
     assert 'href="/homes"' in script.text
 

@@ -88,6 +88,7 @@ class PropertyCatalogService:
                 address=_stored_profile(property_record).address,
                 property_type=_stored_profile(property_record).property_type,
                 is_active=property_record.is_active,
+                is_demo=property_record.operational_details.get("mock") is True,
                 knowledge_source_count=counts.get(property_record.id, 0),
                 updated_at=property_record.updated_at,
             )

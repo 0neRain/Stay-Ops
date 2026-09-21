@@ -42,6 +42,7 @@ const state = {
   readNotifications: new Set(),
   homeOnboarding: { draft: null, selectedFiles: [], uploading: false },
   homesCatalog: { items: [], selectedId: null, detail: null, loading: false },
+  dashboard: { mode: "idle", error: null },
 };
 
 function escapeHtml(value) {
@@ -336,14 +337,11 @@ function notificationPanel() {
   return `<div class="notification-panel ${state.notificationOpen ? "open" : ""}" id="notification-panel"><div class="notification-head"><strong>Handoffs & updates</strong><button type="button" id="mark-read">Mark all read</button></div>${notifications.map((item) => `<button class="notification-item ${state.readNotifications.has(item.id) ? "read" : ""}" type="button" data-notification="${item.id}" data-thread="${item.thread}"><span class="notify-dot"></span><span class="notification-copy"><strong>${item.title}</strong><span>${item.detail}</span></span><span class="notification-time">${item.time}</span></button>`).join("")}</div>`;
 }
 
-function dashboardRail(activePage, initials) {
+function dashboardRail(activePage) {
   const navItem = (page, href, iconName, label) => `
     <a class="rail-button ${activePage === page ? "active" : ""}" href="${href}" data-link aria-label="${label}" title="${label}">
       ${icon(iconName)}<span class="rail-label">${label}</span>
     </a>`;
-  const calendarItem = activePage === "inbox"
-    ? `<button class="rail-button" type="button" aria-label="Calendar" title="Calendar" data-scroll-calendar>${icon("calendar")}<span class="rail-label">Calendar</span></button>`
-    : navItem("calendar", "/dashboard", "calendar", "Calendar");
   return `<aside class="side-rail" aria-label="Dashboard navigation">
     ${brand(false)}
     <nav class="rail-nav">
@@ -351,43 +349,74 @@ function dashboardRail(activePage, initials) {
       <a class="rail-button ${activePage === "homes" ? "active" : ""}" href="/homes" data-link aria-label="Homes and knowledge" title="Homes and knowledge">
         ${icon("home")}<span class="rail-label">Homes</span>
       </a>
-      ${calendarItem}
       <button class="rail-button" type="button" aria-label="Analytics" title="Analytics">${icon("chart")}<span class="rail-label">Analytics</span></button>
-      <button class="rail-button" type="button" aria-label="Settings" title="Settings">${icon("settings")}<span class="rail-label">Settings</span></button>
     </nav>
-    <button class="rail-profile" id="logout-button" aria-label="Sign out" title="Sign out">${escapeHtml(initials)}</button>
+    <button class="rail-logout" id="logout-button" type="button" aria-label="Sign out" title="Sign out">${icon("logout")}</button>
   </aside>`;
 }
 
 function dashboardPage() {
-  const savedUser = JSON.parse(localStorage.getItem("stayops_user") || "null");
-  const initials = savedUser?.full_name ? savedUser.full_name.split(/\s+/).map((part) => part[0]).slice(0,2).join("").toUpperCase() : "AM";
-  const unread = notifications.filter((item) => !state.readNotifications.has(item.id)).length;
+  const authenticated = Boolean(localStorage.getItem("stayops_token"));
+  const showSampleData = !authenticated || state.dashboard.mode === "demo";
+  const unread = showSampleData
+    ? notifications.filter((item) => !state.readNotifications.has(item.id)).length
+    : 0;
+  const workspaceLabel = !authenticated
+    ? "Preview mode"
+    : state.dashboard.mode === "demo"
+      ? "Demo workspace"
+      : "Live workspace";
+  const headerActions = showSampleData
+    ? `<span class="date-chip">${icon("calendar", "icon icon-sm")} Monday, Sep 14</span><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a><div class="notification-wrap"><button class="icon-button" id="notification-button" type="button" aria-label="Open handoff notifications" aria-expanded="${state.notificationOpen}">${icon("bell")}${unread ? `<span class="notification-count">${unread}</span>` : ""}</button>${notificationPanel()}</div>`
+    : `<a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a>`;
+  let content;
+  if (showSampleData) {
+    content = `<div class="dashboard-content">
+      <aside class="inbox-pane"><div class="pane-title"><h2>Guest inbox</h2><span class="filter-label">All homes</span></div><div id="home-groups">${homeGroups()}</div></aside>
+      <section class="chat-pane" id="chat-pane" aria-label="Guest conversation">${chatContent()}</section>
+      <section class="calendar-pane" id="reservation-calendar" aria-label="Reservation calendar">${calendarContent()}</section>
+    </div>`;
+  } else if (state.dashboard.mode === "error") {
+    content = `<div class="dashboard-empty dashboard-error"><span class="feature-icon">${icon("alert")}</span><h2>We couldn’t load your workspace</h2><p>${escapeHtml(state.dashboard.error || "Please try again.")}</p><button class="btn btn-outline" id="retry-dashboard" type="button">Try again</button></div>`;
+  } else if (state.dashboard.mode === "empty") {
+    content = `<div class="dashboard-empty"><span class="feature-icon">${icon("home")}</span><span class="flow-kicker">Your workspace is ready</span><h2>No guest activity yet</h2><p>Add your first home to start building its knowledge base. Conversations, reservations, and handoffs will appear here once they are connected.</p><a class="btn btn-primary" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add your first home</a></div>`;
+  } else {
+    content = `<div class="dashboard-empty dashboard-loading"><span class="loading-ring"></span><strong>Loading your workspace…</strong></div>`;
+  }
   return `
     <a class="skip-link" href="#dashboard-content">Skip to dashboard</a>
     <div class="dashboard-page"><div class="dashboard-shell">
-      ${dashboardRail("inbox", initials)}
+      ${dashboardRail("inbox")}
       <main class="dashboard-main" id="dashboard-content">
-        <header class="dash-header"><div class="dash-header-title"><h1>Guest operations</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><span class="date-chip">${icon("calendar", "icon icon-sm")} Monday, Sep 14</span><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a><div class="notification-wrap"><button class="icon-button" id="notification-button" type="button" aria-label="Open handoff notifications" aria-expanded="${state.notificationOpen}">${icon("bell")}${unread ? `<span class="notification-count">${unread}</span>` : ""}</button>${notificationPanel()}</div></div></header>
-        <div class="dashboard-content">
-          <aside class="inbox-pane"><div class="pane-title"><h2>Guest inbox</h2><span class="filter-label">All homes</span></div><div id="home-groups">${homeGroups()}</div></aside>
-          <section class="chat-pane" id="chat-pane" aria-label="Guest conversation">${chatContent()}</section>
-          <section class="calendar-pane" id="reservation-calendar" aria-label="Reservation calendar">${calendarContent()}</section>
-        </div>
+        <header class="dash-header"><div class="dash-header-title"><h1>Guest operations</h1><span class="workspace-badge">${workspaceLabel}</span></div><div class="header-actions">${headerActions}</div></header>
+        ${content}
       </main>
     </div></div>`;
 }
 
+async function initializeDashboard() {
+  if (!localStorage.getItem("stayops_token") || state.dashboard.mode !== "idle") return;
+  state.dashboard.mode = "loading";
+  state.dashboard.error = null;
+  try {
+    const properties = await apiRequest("/api/v1/properties");
+    state.dashboard.mode = properties.some((property) => property.is_demo) ? "demo" : "empty";
+  } catch (error) {
+    state.dashboard.mode = "error";
+    state.dashboard.error = error.message || "The workspace could not be loaded.";
+  }
+  if ((window.location.pathname.replace(/\/$/, "") || "/") === "/dashboard") {
+    renderRoute();
+  }
+}
+
 function homesPage() {
   const savedUser = JSON.parse(localStorage.getItem("stayops_user") || "null");
-  const initials = savedUser?.full_name
-    ? savedUser.full_name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()
-    : "AM";
   const authenticated = Boolean(localStorage.getItem("stayops_token"));
   return `
     <a class="skip-link" href="#homes-content">Skip to homes</a>
     <div class="dashboard-page homes-page"><div class="dashboard-shell">
-      ${dashboardRail("homes", initials)}
+      ${dashboardRail("homes")}
       <main class="dashboard-main" id="homes-content">
         <header class="dash-header"><div class="dash-header-title"><h1>Homes & knowledge</h1><span class="workspace-badge">${savedUser ? "Live workspace" : "Preview mode"}</span></div><div class="header-actions"><a class="btn btn-primary btn-compact" href="/homes/new" data-link>${icon("plus", "icon icon-sm")} Add home</a></div></header>
         ${authenticated
@@ -960,6 +989,7 @@ async function handleHomeReview(event) {
     const completed = await apiRequest(`/api/v1/properties/${draft.id}/onboarding`, { method: "PATCH", body: JSON.stringify(profile) });
     localStorage.removeItem("stayops_home_draft");
     state.homeOnboarding = { draft: null, selectedFiles: [], uploading: false };
+    state.dashboard = { mode: "idle", error: null };
     navigate("/dashboard");
     toast(`${completed.profile.name} is ready.`);
   } catch (error) {
@@ -1020,7 +1050,12 @@ function bindEvents(path) {
     document.querySelector("#next-week")?.addEventListener("click", () => { state.weekOffset += 1; refreshCalendar(); });
     document.querySelector("[data-scroll-calendar]")?.addEventListener("click", () => document.querySelector("#reservation-calendar")?.scrollIntoView({ behavior: "smooth" }));
     document.querySelector("#logout-button")?.addEventListener("click", handleLogout);
+    document.querySelector("#retry-dashboard")?.addEventListener("click", () => {
+      state.dashboard = { mode: "idle", error: null };
+      renderRoute();
+    });
     setTimeout(() => { const messages = document.querySelector("#messages"); if (messages) messages.scrollTop = messages.scrollHeight; }, 0);
+    initializeDashboard();
   }
 
   if (path === "/homes") {
@@ -1071,6 +1106,7 @@ async function handleAuth(event) {
     if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "We couldn’t complete that request.");
     localStorage.setItem("stayops_token", result.access_token);
     localStorage.setItem("stayops_user", JSON.stringify(result.user));
+    state.dashboard = { mode: "idle", error: null };
     navigate("/dashboard");
     toast(mode === "register" ? "Workspace created. Welcome to StayOps." : "Welcome back.");
   } catch (err) {
@@ -1086,6 +1122,7 @@ async function handleLogout() {
   localStorage.removeItem("stayops_token");
   localStorage.removeItem("stayops_user");
   state.homesCatalog = { items: [], selectedId: null, detail: null, loading: false };
+  state.dashboard = { mode: "idle", error: null };
   navigate("/");
   toast("You’re signed out.");
 }

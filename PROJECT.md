@@ -132,7 +132,7 @@ foundation; `Planned` routes define the intended public contract.
 | POST | `/api/v1/chat/messages` | Implemented | Receive and route a web-chat message |
 | GET | `/api/v1/conversations` | Planned | Search tenant conversations |
 | GET | `/api/v1/conversations/{conversation_id}` | Planned | Read a conversation timeline |
-| POST | `/api/v1/conversations/{conversation_id}/messages` | Planned | Send a human reply |
+| POST | `/api/v1/conversations/{conversation_id}/messages` | Implemented | Send a human reply through the conversation provider adapter |
 | GET | `/api/v1/escalations` | Implemented | List the human handoff queue |
 | POST | `/api/v1/escalations/{escalation_id}/claim` | Implemented | Lock and assign a conversation |
 | POST | `/api/v1/escalations/{escalation_id}/resolve` | Implemented | Send or record a resolution |

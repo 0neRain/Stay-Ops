@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import EscalationStatus, EscalationUrgency
+from app.models.enums import DeliveryStatus, EscalationStatus, EscalationUrgency
 
 
 class ChatMessageRequest(BaseModel):
@@ -39,6 +39,25 @@ class ChatMessageResponse(BaseModel):
     reason: str | None = None
     urgency: EscalationUrgency | None = None
     citations: list[KnowledgeCitation] = Field(default_factory=list)
+
+
+class SendConversationMessageRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=10_000)
+
+    @field_validator("content")
+    @classmethod
+    def reject_blank_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Message content cannot be blank")
+        return value
+
+
+class SendConversationMessageResponse(BaseModel):
+    conversation_id: UUID
+    message_id: UUID
+    provider_message_id: str
+    delivery_status: DeliveryStatus
+    sent_at: datetime
 
 
 class EscalationQueueItem(BaseModel):

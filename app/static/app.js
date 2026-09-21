@@ -35,11 +35,37 @@ const brand = (linked = true) => {
 };
 
 const app = document.querySelector("#app");
+const DEMO_CHAT_STORAGE_KEY = "stayops_demo_chat_v1";
+
+function loadDemoChatState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEMO_CHAT_STORAGE_KEY) || "null");
+    if (!saved || typeof saved !== "object") return { readThreads: [], sentMessages: {} };
+    const readThreads = Array.isArray(saved.readThreads)
+      ? saved.readThreads.filter((threadId) => typeof threadId === "string")
+      : [];
+    const sentMessages = {};
+    if (saved.sentMessages && typeof saved.sentMessages === "object") {
+      Object.entries(saved.sentMessages).forEach(([threadId, messages]) => {
+        if (!Array.isArray(messages)) return;
+        sentMessages[threadId] = messages
+          .filter((message) => message && typeof message.text === "string" && typeof message.time === "string")
+          .map((message) => ({ from: "human", text: message.text.slice(0, 10000), time: message.time, persisted: true }));
+      });
+    }
+    return { readThreads, sentMessages };
+  } catch (_) {
+    return { readThreads: [], sentMessages: {} };
+  }
+}
+
+const savedDemoChatState = loadDemoChatState();
 const state = {
   selectedThread: "maya",
   weekOffset: 0,
   notificationOpen: false,
   readNotifications: new Set(),
+  readThreads: new Set(savedDemoChatState.readThreads),
   homeOnboarding: { draft: null, selectedFiles: [], uploading: false },
   homesCatalog: { items: [], selectedId: null, detail: null, loading: false },
   dashboard: { mode: "idle", error: null },
@@ -153,6 +179,34 @@ const conversations = {
     ],
   },
 };
+
+Object.entries(savedDemoChatState.sentMessages).forEach(([threadId, messages]) => {
+  if (conversations[threadId]) conversations[threadId].messages.push(...messages);
+});
+
+function persistDemoChatState() {
+  const sentMessages = {};
+  Object.entries(conversations).forEach(([threadId, conversation]) => {
+    const messages = conversation.messages
+      .filter((message) => message.persisted)
+      .map(({ text, time }) => ({ text, time }));
+    if (messages.length) sentMessages[threadId] = messages;
+  });
+  try {
+    localStorage.setItem(DEMO_CHAT_STORAGE_KEY, JSON.stringify({
+      readThreads: [...state.readThreads],
+      sentMessages,
+    }));
+  } catch (_) {
+    // The current page still works when browser storage is unavailable.
+  }
+}
+
+function markThreadRead(threadId) {
+  if (!conversations[threadId] || state.readThreads.has(threadId)) return;
+  state.readThreads.add(threadId);
+  persistDemoChatState();
+}
 
 const reservations = [
   { home: "harbor", guest: "Maya Chen", start: "2026-09-14", end: "2026-09-18", color: "teal", status: "In house" },
@@ -285,7 +339,7 @@ function homeGroups() {
         <button class="thread-button ${guest.id === state.selectedThread ? "active" : ""}" type="button" data-thread="${guest.id}">
           <span class="avatar" style="--avatar:${guest.avatar}">${guest.initials}${guest.handoff ? '<i class="alert-dot"></i>' : ""}</span>
           <span class="thread-copy"><span class="thread-name-row"><span class="thread-name">${guest.name}</span><span class="thread-time">${guest.time}</span></span><span class="thread-preview">${guest.preview}</span></span>
-          ${guest.unread ? `<span class="thread-unread">${guest.unread}</span>` : ""}
+          ${guest.unread && !state.readThreads.has(guest.id) ? `<span class="thread-unread">${guest.unread}</span>` : ""}
         </button>`).join("")}</div>
     </section>`).join("");
 }
@@ -1003,7 +1057,10 @@ async function handleHomeReview(event) {
 function renderRoute() {
   const path = window.location.pathname.replace(/\/$/, "") || "/";
   if (path === "/auth") app.innerHTML = authPage();
-  else if (path === "/dashboard") app.innerHTML = dashboardPage();
+  else if (path === "/dashboard") {
+    markThreadRead(state.selectedThread);
+    app.innerHTML = dashboardPage();
+  }
   else if (path === "/homes") app.innerHTML = homesPage();
   else if (path === "/homes/new") app.innerHTML = newHomePage();
   else app.innerHTML = landingPage();
@@ -1067,8 +1124,10 @@ function bindEvents(path) {
 }
 
 function selectThread(threadId) {
+  markThreadRead(threadId);
   state.selectedThread = threadId;
   document.querySelectorAll(".thread-button").forEach((button) => button.classList.toggle("active", button.dataset.thread === threadId));
+  document.querySelector(`.thread-button[data-thread="${threadId}"] .thread-unread`)?.remove();
   const chatPane = document.querySelector("#chat-pane");
   if (chatPane) { chatPane.innerHTML = chatContent(); document.querySelector("#chat-form")?.addEventListener("submit", handleMessage); }
   setTimeout(() => { const messages = document.querySelector("#messages"); if (messages) messages.scrollTop = messages.scrollHeight; }, 0);
@@ -1085,7 +1144,8 @@ function handleMessage(event) {
   const text = input.value.trim();
   if (!text) return;
   const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  conversations[state.selectedThread].messages.push({ from: "human", text, time: now });
+  conversations[state.selectedThread].messages.push({ from: "human", text, time: now, persisted: true });
+  persistDemoChatState();
   input.value = "";
   selectThread(state.selectedThread);
 }

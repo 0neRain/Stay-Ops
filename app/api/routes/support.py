@@ -12,12 +12,13 @@ from app.api.dependencies import (
     DatabaseSession,
     require_roles,
 )
-from app.models.domain import AuditEvent, Conversation, Escalation, Message
+from app.models.domain import AuditEvent, Conversation, Escalation, Integration, Message
 from app.models.enums import (
     ConversationStatus,
     DeliveryStatus,
     EscalationStatus,
     EscalationUrgency,
+    IntegrationStatus,
     MembershipRole,
     MessageSender,
 )
@@ -28,6 +29,15 @@ from app.schemas.support import (
     EscalationResolutionResponse,
     KnowledgeCitation,
     ResolveEscalationRequest,
+    SendConversationMessageRequest,
+    SendConversationMessageResponse,
+)
+from app.services.chat_delivery import (
+    ChatAdapterNotConfiguredError,
+    ChatAdapterResolver,
+    ChatDeliveryError,
+    ChatSendRequest,
+    get_chat_adapter_resolver,
 )
 from app.services.embeddings import configured_embedding_provider
 from app.services.support_pipeline import SupportPipelineError, process_guest_message
@@ -43,6 +53,7 @@ HumanOperator = Annotated[
         )
     ),
 ]
+ChatAdapters = Annotated[ChatAdapterResolver, Depends(get_chat_adapter_resolver)]
 
 
 def _queue_item(escalation: Escalation) -> EscalationQueueItem:
@@ -105,6 +116,138 @@ async def receive_guest_message(
             )
             for hit in result.decision.hits
         ],
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages",
+    response_model=SendConversationMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_conversation_message(
+    conversation_id: UUID,
+    payload: SendConversationMessageRequest,
+    context: HumanOperator,
+    session: DatabaseSession,
+    adapters: ChatAdapters,
+) -> SendConversationMessageResponse:
+    conversation = await session.scalar(
+        select(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == context.tenant.id,
+        )
+        .with_for_update()
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.status == ConversationStatus.RESOLVED:
+        raise HTTPException(status_code=409, detail="Conversation is already resolved")
+    if conversation.human_locked_by_id not in {None, context.user.id}:
+        raise HTTPException(status_code=409, detail="Conversation is assigned to another user")
+    if conversation.integration_id is None or not conversation.external_id:
+        raise HTTPException(status_code=409, detail="Conversation has no provider delivery channel")
+
+    integration = await session.scalar(
+        select(Integration).where(
+            Integration.id == conversation.integration_id,
+            Integration.tenant_id == context.tenant.id,
+        )
+    )
+    if integration is None:
+        raise HTTPException(status_code=409, detail="Conversation integration is unavailable")
+    if integration.status != IntegrationStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="Conversation integration is not active")
+    try:
+        adapter = adapters.resolve(integration)
+    except ChatAdapterNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    now = datetime.now(timezone.utc)
+    message = Message(
+        conversation_id=conversation.id,
+        sender=MessageSender.HUMAN,
+        sender_user_id=context.user.id,
+        content=payload.content.strip(),
+        delivery_status=DeliveryStatus.QUEUED,
+    )
+    session.add(message)
+    conversation.status = ConversationStatus.HUMAN_ACTIVE
+    conversation.human_locked_by_id = context.user.id
+    conversation.human_locked_at = now
+    await session.flush()
+    session.add(
+        AuditEvent(
+            tenant_id=context.tenant.id,
+            actor_user_id=context.user.id,
+            event_type="conversation.message_queued",
+            entity_type="message",
+            entity_id=message.id,
+            details={
+                "conversation_id": str(conversation.id),
+                "provider": integration.provider.value,
+            },
+            created_at=now,
+        )
+    )
+    # Commit the queued message before making an external call so every delivery
+    # attempt has a durable local record and a stable provider idempotency key.
+    await session.commit()
+
+    try:
+        receipt = await adapter.send_message(
+            ChatSendRequest(
+                conversation_external_id=conversation.external_id,
+                content=message.content,
+                idempotency_key=str(message.id),
+            )
+        )
+    except ChatDeliveryError as exc:
+        message.delivery_status = DeliveryStatus.FAILED
+        session.add(
+            AuditEvent(
+                tenant_id=context.tenant.id,
+                actor_user_id=context.user.id,
+                event_type="conversation.message_failed",
+                entity_type="message",
+                entity_id=message.id,
+                details={
+                    "conversation_id": str(conversation.id),
+                    "provider": integration.provider.value,
+                    "error_type": type(exc).__name__,
+                },
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+        raise HTTPException(status_code=502, detail="Chat provider failed to send message") from exc
+
+    message.delivery_status = DeliveryStatus.SENT
+    message.provider_message_id = receipt.provider_message_id
+    message.provider_created_at = receipt.sent_at
+    conversation.last_message_at = receipt.sent_at
+    session.add(
+        AuditEvent(
+            tenant_id=context.tenant.id,
+            actor_user_id=context.user.id,
+            event_type="conversation.message_sent",
+            entity_type="message",
+            entity_id=message.id,
+            details={
+                "conversation_id": str(conversation.id),
+                "provider": integration.provider.value,
+                "provider_message_id": receipt.provider_message_id,
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await session.commit()
+    return SendConversationMessageResponse(
+        conversation_id=conversation.id,
+        message_id=message.id,
+        provider_message_id=receipt.provider_message_id,
+        delivery_status=message.delivery_status,
+        sent_at=receipt.sent_at,
     )
 
 

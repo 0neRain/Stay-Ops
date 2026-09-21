@@ -37,6 +37,9 @@ async def test_frontend_routes_serve_the_application() -> None:
     assert "No guest activity yet" in script.text
     assert "Homes & knowledge" in script.text
     assert 'href="/homes"' in script.text
+    assert 'DEMO_CHAT_STORAGE_KEY = "stayops_demo_chat_v1"' in script.text
+    assert "markThreadRead(threadId)" in script.text
+    assert "persistDemoChatState();" in script.text
 
 
 async def test_auth_routes_are_in_openapi_schema() -> None:
@@ -50,6 +53,7 @@ async def test_auth_routes_are_in_openapi_schema() -> None:
     assert "/api/v1/auth/logout" in paths
     assert "/api/v1/auth/me" in paths
     assert "/api/v1/chat/messages" in paths
+    assert "/api/v1/conversations/{conversation_id}/messages" in paths
     assert "/api/v1/escalations" in paths
     assert "/api/v1/escalations/{escalation_id}/claim" in paths
     assert "/api/v1/escalations/{escalation_id}/resolve" in paths
